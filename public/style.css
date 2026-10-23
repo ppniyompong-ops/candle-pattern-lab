@@ -137,6 +137,12 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .toolbar-hint { display: flex; align-items: center; gap: 7px; color: #758992; font-size: 9px; white-space: nowrap; }
 .hint-pip { width: 5px; height: 5px; flex-basis: 5px; box-shadow: none; }
 .chart-frame { position: relative; display: grid; grid-template-columns: 42px minmax(0,1fr); height: 315px; margin-top: 8px; }
+.chart-navigation { position: absolute; z-index: 2; right: 12px; bottom: 6px; display: flex; align-items: center; gap: 3px; padding: 4px; border: 1px solid rgba(140,164,174,.18); border-radius: 8px; background: rgba(10,16,22,.88); box-shadow: 0 4px 14px rgba(0,0,0,.2); }
+.chart-navigation button { min-width: 27px; height: 25px; padding: 0 7px; border: 0; border-radius: 5px; color: #a9bbc0; background: transparent; font: 12px var(--sans); cursor: pointer; }
+.chart-navigation button:hover:not(:disabled) { color: var(--mint); background: rgba(114,217,173,.1); }
+.chart-navigation button:disabled { opacity: .38; cursor: default; }
+#zoom-readout { min-width: 42px; color: #82969e; font: 9px var(--mono); text-align: center; }
+.navigation-divider { width: 1px; height: 15px; margin: 0 2px; background: var(--line); }
 .chart-y-labels { display: flex; flex-direction: column; justify-content: space-between; padding: 6px 5px 23px 0; color: #667983; font: 9px var(--mono); text-align: right; }
 #candle-canvas { display: block; width: 100%; height: 100%; min-width: 0; touch-action: none; cursor: crosshair; }
 .chart-empty { position: absolute; left: 42px; top: 0; right: 0; bottom: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; border: 1px dashed rgba(126, 159, 169, .18); border-radius: 7px; background: rgba(13, 21, 28, .72); pointer-events: none; }
@@ -148,6 +154,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .chart-x-labels b { color: #a5cdb7; font-weight: 500; }
 .x-track { height: 1px; flex: 1; background: linear-gradient(90deg, rgba(104,132,143,.08), rgba(104,132,143,.24)); }
 .chart-legend { display: flex; align-items: center; gap: 17px; min-height: 36px; margin-top: 8px; padding-top: 6px; border-top: 1px solid var(--line-soft); color: #82939c; font-size: 9px; }
+.chart-gesture-note { margin: 0 1px 2px; color: #5f727b; font-size: 8px; }
 .legend-candle { position: relative; display: inline-block; width: 7px; height: 10px; margin: 0 5px -2px 0; border-radius: 1px; }
 .legend-candle::before { position: absolute; top: -3px; bottom: -3px; left: 3px; width: 1px; background: currentColor; content: ""; }
 .legend-candle.up { color: var(--mint); background: currentColor; }

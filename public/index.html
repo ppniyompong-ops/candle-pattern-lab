@@ -81,6 +81,13 @@
               <div class="chart-y-labels" aria-hidden="true"><span id="axis-top">—</span><span id="axis-upper">—</span><span id="axis-mid">—</span><span id="axis-lower">—</span><span id="axis-bottom">—</span></div>
               <canvas id="candle-canvas" tabindex="0" role="application" aria-label="พื้นที่วาดกราฟแท่งเทียน ใช้เมาส์ลากเพื่อวาด เลือก หรือลบแท่ง"></canvas>
               <div class="chart-empty hidden" id="empty-hint"><span>✳</span><strong>เริ่มวาดแพตเทิร์นของคุณ</strong><small>เลือกแท่งขึ้นหรือแท่งลง แล้วลากบนกราฟ</small></div>
+              <div class="chart-navigation" aria-label="ควบคุมมุมมองกราฟ">
+                <button id="zoom-out" type="button" title="ซูมออก" aria-label="ซูมออก">−</button>
+                <span id="zoom-readout" aria-live="polite">100%</span>
+                <button id="zoom-in" type="button" title="ซูมเข้า" aria-label="ซูมเข้า">＋</button>
+                <span class="navigation-divider"></span>
+                <button id="zoom-fit" type="button" title="จัดแท่งทั้งหมดให้อยู่ในกราฟ" aria-label="จัดแท่งทั้งหมดให้อยู่ในกราฟ">พอดี</button>
+              </div>
             </div>
             <div class="chart-x-labels"><span>ก่อนหน้า</span><div class="x-track"></div><span>ล่าสุด <b id="latest-bar-label">05</b></span></div>
             <div class="chart-legend">
@@ -89,6 +96,7 @@
               <span class="legend-spacer"></span>
               <span class="selected-readout" id="selected-readout">เลือกแท่งเทียนเพื่อแก้ค่า OHLC</span>
             </div>
+            <div class="chart-gesture-note">โหมดเลือก: ลากพื้นที่ว่างเพื่อเลื่อนกราฟ · หมุนล้อเมาส์เพื่อซูม</div>
           </section>
 
           <section class="panel editor-panel" aria-labelledby="editor-title">

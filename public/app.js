@@ -20,7 +20,9 @@
     drawing: null,
     undo: [],
     redo: [],
-    logic: ""
+    logic: "",
+    viewScale: 1,
+    viewStart: 0
   };
   const fields = {
     open: document.getElementById("ohlc-open"),
@@ -146,9 +148,12 @@
       ctx.stroke();
     }
     ctx.setLineDash([]);
-    const slot = (plot.right - plot.left) / MAX_BARS;
-    for (let i = 0; i <= MAX_BARS; i += 1) {
-      const x = plot.left + i * slot;
+    const slot = (plot.right - plot.left) / MAX_BARS * state.viewScale;
+    const first = Math.floor(state.viewStart);
+    const last = Math.ceil(state.viewStart + (plot.right - plot.left) / slot);
+    for (let i = first; i <= last; i += 1) {
+      const x = plot.left + (i - state.viewStart) * slot;
+      if (x < plot.left || x > plot.right) continue;
       ctx.beginPath();
       ctx.strokeStyle = "rgba(158,180,194,.045)";
       ctx.moveTo(Math.round(x) + 0.5, plot.top);
@@ -161,9 +166,10 @@
   }
 
   function drawCandle(bar, index, plot, range, preview) {
-    const slot = (plot.right - plot.left) / MAX_BARS;
-    const centerX = plot.left + slot * (index + 0.5);
-    const bodyWidth = Math.min(14, Math.max(7, slot * 0.38));
+    const slot = (plot.right - plot.left) / MAX_BARS * state.viewScale;
+    const centerX = plot.left + (index + 0.5 - state.viewStart) * slot;
+    if (centerX < plot.left - slot || centerX > plot.right + slot) return;
+    const bodyWidth = Math.min(26, Math.max(7, slot * 0.38));
     const openY = yForPrice(bar.open, range, plot);
     const closeY = yForPrice(bar.close, range, plot);
     const highY = yForPrice(bar.high, range, plot);
@@ -230,6 +236,7 @@
   function renderChart() {
     if (!chartSize.width || !chartSize.height) return;
     const plot = chartPlot();
+    clampViewStart(plot);
     const preview = getPreviewBar();
     const range = currentRange(preview?.bar);
     priceRange = range;
@@ -304,8 +311,47 @@
   }
 
   function indexForX(x, plot) {
-    const slot = (plot.right - plot.left) / MAX_BARS;
-    return Math.max(0, Math.min(MAX_BARS - 1, Math.floor((x - plot.left) / slot)));
+    const slot = (plot.right - plot.left) / MAX_BARS * state.viewScale;
+    return Math.max(0, Math.min(MAX_BARS - 1, Math.floor(state.viewStart + (x - plot.left) / slot)));
+  }
+
+  function visibleSlots(plot) {
+    return MAX_BARS / state.viewScale;
+  }
+
+  function clampViewStart(plot) {
+    const lastVisibleStart = Math.max(0, state.bars.length + 1 - visibleSlots(plot));
+    state.viewStart = Math.max(0, Math.min(lastVisibleStart, state.viewStart));
+  }
+
+  function setZoom(nextScale, anchorX) {
+    const plot = chartPlot();
+    const oldSlot = (plot.right - plot.left) / MAX_BARS * state.viewScale;
+    const anchorIndex = state.viewStart + (anchorX - plot.left) / oldSlot;
+    state.viewScale = Math.max(0.7, Math.min(4, nextScale));
+    const newSlot = (plot.right - plot.left) / MAX_BARS * state.viewScale;
+    state.viewStart = anchorIndex - (anchorX - plot.left) / newSlot;
+    clampViewStart(plot);
+    renderChart();
+    updateZoomControls();
+  }
+
+  function updateZoomControls() {
+    const readout = document.getElementById("zoom-readout");
+    if (readout) readout.textContent = Math.round(state.viewScale * 100) + "%";
+    const zoomIn = document.getElementById("zoom-in");
+    const zoomOut = document.getElementById("zoom-out");
+    if (zoomIn) zoomIn.disabled = state.viewScale >= 4;
+    if (zoomOut) zoomOut.disabled = state.viewScale <= 0.7;
+  }
+
+  function fitChart() {
+    state.viewScale = state.bars.length
+      ? Math.min(4, MAX_BARS / Math.max(3, state.bars.length + 2))
+      : 1;
+    state.viewStart = 0;
+    renderChart();
+    updateZoomControls();
   }
 
   function setSelected(index) {
@@ -323,8 +369,8 @@
       if (state.bars.length) {
         const index = Math.min(requestedIndex, state.bars.length - 1);
         const bar = state.bars[index];
-        const slot = (point.plot.right - point.plot.left) / MAX_BARS;
-        const centerX = point.plot.left + slot * (index + 0.5);
+        const slot = (point.plot.right - point.plot.left) / MAX_BARS * state.viewScale;
+        const centerX = point.plot.left + (index + 0.5 - state.viewStart) * slot;
         const handles = [
           ["high", yForPrice(bar.high, priceRange, point.plot)],
           ["open", yForPrice(bar.open, priceRange, point.plot)],
@@ -339,7 +385,15 @@
           canvas.setPointerCapture(event.pointerId);
           renderChart();
         } else {
-          setSelected(index);
+          state.selected = index;
+          state.drawing = {
+            panning: true,
+            moved: false,
+            startX: point.x,
+            initialViewStart: state.viewStart,
+            index
+          };
+          canvas.setPointerCapture(event.pointerId);
         }
       }
       return;
@@ -372,6 +426,17 @@
   canvas.addEventListener("pointermove", event => {
     if (!state.drawing) return;
     const point = pointForEvent(event);
+    if (state.drawing.panning) {
+      const delta = point.x - state.drawing.startX;
+      if (Math.abs(delta) > 3) state.drawing.moved = true;
+      if (state.drawing.moved) {
+        const slot = (point.plot.right - point.plot.left) / MAX_BARS * state.viewScale;
+        state.viewStart = state.drawing.initialViewStart - delta / slot;
+        clampViewStart(point.plot);
+        renderChart();
+      }
+      return;
+    }
     const y = Math.max(point.plot.top, Math.min(point.plot.bottom, point.y));
     const fraction = Math.max(0, Math.min(1, (y - point.plot.top) / (point.plot.bottom - point.plot.top)));
     if (state.drawing.adjusting) {
@@ -392,6 +457,14 @@
 
   function finishDrawing() {
     if (!state.drawing) return;
+    if (state.drawing.panning) {
+      const moved = state.drawing.moved;
+      state.drawing = null;
+      if (moved) updateZoomControls();
+      else setSelected(state.selected);
+      render();
+      return;
+    }
     if (state.drawing.adjusting) {
       state.drawing = null;
       render();
@@ -408,6 +481,21 @@
   }
   canvas.addEventListener("pointerup", finishDrawing);
   canvas.addEventListener("pointercancel", finishDrawing);
+
+  canvas.addEventListener("wheel", event => {
+    event.preventDefault();
+    const point = pointForEvent(event);
+    if (event.shiftKey || Math.abs(event.deltaX) > Math.abs(event.deltaY)) {
+      const slot = (point.plot.right - point.plot.left) / MAX_BARS * state.viewScale;
+      const distance = event.deltaX || event.deltaY;
+      state.viewStart += distance / slot * 0.8;
+      clampViewStart(point.plot);
+      renderChart();
+      return;
+    }
+    const factor = event.deltaY < 0 ? 1.15 : 1 / 1.15;
+    setZoom(state.viewScale * factor, point.x);
+  }, { passive: false });
 
   canvas.addEventListener("keydown", event => {
     if (event.key === "ArrowLeft" && state.bars.length) {
@@ -428,6 +516,16 @@
   document.querySelectorAll("[data-tool]").forEach(button => {
     button.addEventListener("click", () => setTool(button.dataset.tool));
   });
+
+  document.getElementById("zoom-in").addEventListener("click", () => {
+    const plot = chartPlot();
+    setZoom(state.viewScale * 1.25, (plot.left + plot.right) / 2);
+  });
+  document.getElementById("zoom-out").addEventListener("click", () => {
+    const plot = chartPlot();
+    setZoom(state.viewScale / 1.25, (plot.left + plot.right) / 2);
+  });
+  document.getElementById("zoom-fit").addEventListener("click", fitChart);
 
   elements.undoButton.addEventListener("click", () => {
     if (!state.undo.length) return;
@@ -667,5 +765,6 @@
   if ("ResizeObserver" in window) new ResizeObserver(resizeCanvas).observe(canvas);
   renderSavedPatterns();
   render();
+  updateZoomControls();
   resizeCanvas();
 })();

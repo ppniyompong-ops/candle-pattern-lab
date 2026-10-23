@@ -124,8 +124,8 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .icon-button:hover:not(:disabled), .text-button:hover, .copy-button:hover:not(:disabled) { color: var(--mint); border-color: rgba(114,217,173,.38); }
 .icon-button:disabled, .copy-button:disabled { opacity: .36; cursor: default; }
 .text-button { padding: 0 10px; font-size: 10px; }
-.toolbar { min-height: 48px; display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 15px; border-top: 1px solid var(--line-soft); border-bottom: 1px solid var(--line-soft); }
-.tool-group { display: flex; align-items: center; gap: 3px; }
+.toolbar { min-height: 48px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px 12px; margin-top: 15px; border-top: 1px solid var(--line-soft); border-bottom: 1px solid var(--line-soft); }
+.tool-group { display: flex; align-items: center; gap: 3px; flex: 1 1 430px; flex-wrap: wrap; }
 .tool-button { display: flex; align-items: center; gap: 7px; min-height: 31px; padding: 0 9px; border: 1px solid transparent; border-radius: 6px; color: #81939d; background: transparent; font-size: 10px; cursor: pointer; }
 .tool-button:hover { color: #d6e5e8; background: rgba(255,255,255,.035); }
 .tool-button.active { color: #d7f1e4; border-color: rgba(114,217,173,.24); background: rgba(94,170,130,.11); }
@@ -135,7 +135,12 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .bull-swatch { color: var(--mint); }
 .bear-swatch { color: var(--red); }
 .tool-glyph { width: 12px; text-align: center; font-size: 15px; line-height: 1; }
-.toolbar-hint { display: flex; align-items: center; gap: 7px; color: #758992; font-size: 9px; white-space: nowrap; }
+.line-swatch { width: 14px; height: 0; border-top: 2px solid currentColor; }
+.line-swatch.normal, .legend-line.normal { color: #e8c98a; }
+.line-swatch.entry, .legend-line.entry { color: #78b9f5; border-top-style: dashed; }
+.line-swatch.tp, .legend-line.tp { color: var(--mint); border-top-style: dashed; }
+.line-swatch.sl, .legend-line.sl { color: var(--red); border-top-style: dashed; }
+.toolbar-hint { display: flex; align-items: center; gap: 7px; margin-left: auto; color: #758992; font-size: 9px; white-space: nowrap; }
 .hint-pip { width: 5px; height: 5px; flex-basis: 5px; box-shadow: none; }
 .chart-frame { position: relative; display: block; height: 315px; margin-top: 8px; }
 .chart-navigation { position: absolute; z-index: 2; right: 12px; bottom: 6px; display: flex; align-items: center; gap: 3px; padding: 4px; border: 1px solid rgba(140,164,174,.18); border-radius: 8px; background: rgba(10,16,22,.88); box-shadow: 0 4px 14px rgba(0,0,0,.2); }
@@ -159,6 +164,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .legend-candle::before { position: absolute; top: -3px; bottom: -3px; left: 3px; width: 1px; background: currentColor; content: ""; }
 .legend-candle.up { color: var(--mint); background: currentColor; }
 .legend-candle.down { color: var(--red); background: currentColor; }
+.legend-line { display: inline-block; width: 10px; height: 0; margin: 0 5px 3px 0; border-top: 2px solid currentColor; }
 .legend-spacer { flex: 1; }
 .selected-readout { color: #7a8d96; font: 8px var(--mono); text-align: right; }
 
@@ -209,7 +215,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .ai-heading h2 { margin-top: 4px; }
 .ai-status { align-self: flex-start; margin-left: auto; padding: 4px 6px; border: 1px solid rgba(114,217,173,.2); border-radius: 5px; color: #89cfab; background: rgba(114,217,173,.07); font: 700 7px "Manrope", sans-serif; letter-spacing: 1px; }
 .ai-description { margin: 13px 0; color: #91a3a8; font-size: 10px; line-height: 1.65; }
-.ai-context { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; padding: 10px 8px; border: 1px solid rgba(138,173,171,.1); border-radius: 7px; background: rgba(6,12,15,.2); }
+.ai-context { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 5px; padding: 10px 8px; border: 1px solid rgba(138,173,171,.1); border-radius: 7px; background: rgba(6,12,15,.2); }
 .ai-context div { min-width: 0; display: grid; grid-template-columns: 12px 1fr; column-gap: 4px; align-items: center; }
 .context-icon { color: #81c9a5; font-size: 10px; }
 .ai-context div > span:nth-child(2) { overflow: hidden; color: #778d93; font-size: 8px; white-space: nowrap; }
@@ -293,7 +299,8 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   .chart-panel, .editor-panel, .saved-panel { padding-right: 12px; padding-left: 12px; }
   .chart-frame { height: 260px; }
   .toolbar { align-items: flex-start; flex-direction: column; justify-content: center; gap: 3px; padding: 7px 0; }
-  .tool-group { width: 100%; justify-content: space-between; }
+  .tool-group { width: 100%; flex: 0 1 auto; justify-content: flex-start; }
+  .toolbar-hint { margin-left: 0; }
   .tool-button { gap: 5px; padding: 0 6px; font-size: 9px; }
   .toolbar-hint { padding-left: 5px; font-size: 8px; }
   .chart-legend { flex-wrap: wrap; gap: 10px; }

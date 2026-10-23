@@ -47,7 +47,7 @@
         <div>
           <div class="eyebrow"><span class="eyebrow-line"></span>PRICE ACTION WORKSPACE</div>
           <h1>Candle Pattern <span>Lab</span></h1>
-          <p>วาดแท่งเทียนตามไอเดียของคุณ แล้วเปลี่ยนภาพให้เป็นกฎตรวจจับที่นำไปต่อยอดได้</p>
+          <p>วาดแท่งเทียนและเส้นระดับตามไอเดีย แล้วให้ AI ช่วยแปลงเป็นกฎตรวจจับ</p>
         </div>
         <div class="heading-badge"><span class="live-dot"></span><span>พร้อมสร้างแพตเทิร์น</span></div>
       </section>
@@ -57,8 +57,8 @@
           <section class="panel chart-panel" aria-labelledby="chart-title">
             <div class="panel-top">
               <div>
-                <div class="panel-kicker">DRAWING BOARD <span class="kicker-dot">•</span> <span id="bar-count">5 BARS</span></div>
-                <h2 id="chart-title">พื้นที่วาดแท่งเทียน</h2>
+                <div class="panel-kicker">DRAWING BOARD <span class="kicker-dot">•</span> <span id="bar-count">5 BARS</span> <span class="kicker-dot">•</span> <span id="line-count">0 LINES</span></div>
+                <h2 id="chart-title">พื้นที่วาดแพตเทิร์น</h2>
               </div>
               <div class="chart-actions">
                 <button id="undo-button" class="icon-button" type="button" title="ย้อนกลับ" aria-label="ย้อนกลับ" disabled>↶</button>
@@ -72,14 +72,18 @@
                 <button class="tool-button active" type="button" data-tool="bull" aria-pressed="true"><span class="tool-candle bull-swatch"></span><span>แท่งขึ้น</span></button>
                 <button class="tool-button" type="button" data-tool="bear" aria-pressed="false"><span class="tool-candle bear-swatch"></span><span>แท่งลง</span></button>
                 <button class="tool-button" type="button" data-tool="select" aria-pressed="false"><span class="tool-glyph">⌖</span><span>เลือก</span></button>
-                <button class="tool-button" type="button" data-tool="erase" aria-pressed="false"><span class="tool-glyph">⌫</span><span>ลบแท่ง</span></button>
+                <button class="tool-button" type="button" data-tool="erase" aria-pressed="false"><span class="tool-glyph">⌫</span><span>ลบ</span></button>
+                <button class="tool-button" type="button" data-tool="line" aria-pressed="false"><span class="line-swatch normal"></span><span>เส้น</span></button>
+                <button class="tool-button" type="button" data-tool="entry" aria-pressed="false"><span class="line-swatch entry"></span><span>Entry</span></button>
+                <button class="tool-button" type="button" data-tool="tp" aria-pressed="false"><span class="line-swatch tp"></span><span>TP</span></button>
+                <button class="tool-button" type="button" data-tool="sl" aria-pressed="false"><span class="line-swatch sl"></span><span>SL</span></button>
               </div>
               <div class="toolbar-hint"><span class="hint-pip"></span><span id="tool-hint">เริ่มลากจาก Open ไปยัง Close</span></div>
             </div>
 
             <div class="chart-frame">
-              <canvas id="candle-canvas" tabindex="0" role="application" aria-label="พื้นที่วาดกราฟแท่งเทียน ใช้เมาส์ลากเพื่อวาด เลือก หรือลบแท่ง"></canvas>
-              <div class="chart-empty hidden" id="empty-hint"><span>✳</span><strong>เริ่มจากวาดหรือเล่ารูปแบบของคุณ</strong><small>วาดแท่งบนกราฟ หรือใช้คำอธิบายอย่างเดียวก็ได้</small></div>
+              <canvas id="candle-canvas" tabindex="0" role="application" aria-label="พื้นที่วาดแพตเทิร์น ใช้เมาส์ลากเพื่อวาด เลือก หรือย้ายแท่งและเส้น"></canvas>
+              <div class="chart-empty hidden" id="empty-hint"><span>✳</span><strong>เริ่มจากวาดหรือเล่ารูปแบบของคุณ</strong><small>วาดแท่งหรือเส้นบนกราฟ หรือใช้คำอธิบายอย่างเดียวก็ได้</small></div>
               <div class="chart-navigation" aria-label="ควบคุมมุมมองกราฟ">
                 <button id="zoom-out" type="button" title="ซูมออก" aria-label="ซูมออก">−</button>
                 <span id="zoom-readout" aria-live="polite">100%</span>
@@ -92,10 +96,14 @@
             <div class="chart-legend">
               <span><i class="legend-candle up"></i> แท่งขึ้น</span>
               <span><i class="legend-candle down"></i> แท่งลง</span>
+              <span><i class="legend-line normal"></i> เส้น</span>
+              <span><i class="legend-line entry"></i> Entry</span>
+              <span><i class="legend-line tp"></i> TP</span>
+              <span><i class="legend-line sl"></i> SL</span>
               <span class="legend-spacer"></span>
               <span class="selected-readout" id="selected-readout">กราฟแสดงสัดส่วนแท่งเทียนโดยไม่แสดงราคา</span>
             </div>
-            <div class="chart-gesture-note">โหมดเลือก: ลากกราฟเพื่อเลื่อน · หมุนล้อเมาส์เพื่อซูม</div>
+            <div class="chart-gesture-note">โหมดเลือก: ลากกราฟเพื่อเลื่อน · ลากเส้นเพื่อย้าย · หมุนล้อเมาส์เพื่อซูม</div>
           </section>
 
           <section class="panel editor-panel" aria-labelledby="editor-title">
@@ -106,7 +114,7 @@
               </div>
               <span class="edit-lock"><span>●</span>แก้ไขรูปทรง</span>
             </div>
-            <p class="editor-hint">เลือกเครื่องมือ “เลือก” แล้วลากจุดจับ Open / High / Low / Close บนแท่ง เพื่อปรับสัดส่วน ไม่ต้องใส่ราคา</p>
+            <p class="editor-hint">เลือกเครื่องมือ “เลือก” แล้วลากจุดจับบนแท่งหรือเส้นเพื่อปรับภาพ ไม่ต้องใส่ราคา</p>
           </section>
 
           <section class="panel saved-panel" aria-labelledby="saved-title">
@@ -138,12 +146,13 @@
               <div><div class="panel-kicker">GEMINI ASSIST</div><h2 id="ai-title">ให้ AI เขียน logic</h2></div>
               <span class="ai-status">AI</span>
             </div>
-            <p class="ai-description">วาดรูปแบบและอธิบายคร่าว ๆ แล้ว Gemini จะเสนอ logic 3 แบบให้เลือกแบบที่ตรงที่สุด</p>
+            <p class="ai-description">วาดแท่งและเส้น Entry / TP / SL พร้อมอธิบายคร่าว ๆ แล้ว Gemini จะเสนอ logic 3 แบบให้เลือก</p>
             <label class="field-label" for="pattern-description">อธิบายแพตเทิร์นคร่าว ๆ</label>
             <textarea id="pattern-description" class="description-input" maxlength="1200" rows="4" placeholder="เช่น มีแท่งลงยาว 2 แท่ง แล้วตามด้วยแท่งขึ้นที่มีไส้ล่างยาว ปิดเหนือครึ่งหนึ่งของแท่งก่อนหน้า"></textarea>
-            <p class="description-hint">วาดประกอบหรือใช้คำอธิบายอย่างเดียวก็ได้</p>
+            <p class="description-hint">วาดแท่งหรือเส้นประกอบ หรือใช้คำอธิบายอย่างเดียวก็ได้</p>
             <div class="ai-context">
               <div><span class="context-icon">▥</span><span>อินพุต</span><strong id="ai-bar-count">5 candles</strong></div>
+              <div><span class="context-icon">╱</span><span>เส้นอ้างอิง</span><strong id="ai-line-count">0 lines</strong></div>
               <div><span class="context-icon">⌘</span><span>ตัวเลือก</span><strong>3 แบบ</strong></div>
               <div><span class="context-icon">◎</span><span>เอาต์พุต</span><strong>JavaScript</strong></div>
             </div>

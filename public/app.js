@@ -559,6 +559,32 @@
     return nearest;
   }
 
+  function candlePartAt(point, index, plot) {
+    const bar = state.bars[index];
+    if (!bar) return null;
+    const slot = (plot.right - plot.left) / MAX_BARS * state.viewScale;
+    const centerX = plot.left + (index + 0.5 - state.viewStart) * slot;
+    const bodyWidth = Math.min(26, Math.max(7, slot * 0.38));
+    if (Math.abs(point.x - centerX) > Math.max(11, bodyWidth / 2 + 5)) return null;
+    const highY = yForPrice(bar.high, priceRange, plot);
+    const lowY = yForPrice(bar.low, priceRange, plot);
+    const openY = yForPrice(bar.open, priceRange, plot);
+    const closeY = yForPrice(bar.close, priceRange, plot);
+    const bodyTop = Math.min(openY, closeY);
+    const bodyBottom = Math.max(openY, closeY);
+    const hitRadius = 10;
+    if (point.y <= bodyTop + hitRadius &&
+        distanceToSegment(point.x, point.y, centerX, highY, centerX, bodyTop) <= hitRadius) return "high";
+    if (point.y >= bodyBottom - hitRadius &&
+        distanceToSegment(point.x, point.y, centerX, bodyBottom, centerX, lowY) <= hitRadius) return "low";
+    if (point.y >= bodyTop - hitRadius && point.y <= bodyBottom + hitRadius) {
+      return Math.abs(point.y - openY) <= Math.abs(point.y - closeY) ? "open" : "close";
+    }
+    if (Math.abs(point.y - highY) <= hitRadius) return "high";
+    if (Math.abs(point.y - lowY) <= hitRadius) return "low";
+    return null;
+  }
+
   function linePositionForX(x, plot) {
     const slot = (plot.right - plot.left) / MAX_BARS * state.viewScale;
     return Math.max(0, Math.min(MAX_BARS, state.viewStart + (x - plot.left) / slot));
@@ -725,29 +751,17 @@
       }
       state.selectedLine = null;
       if (state.bars.length) {
-        const slot = (point.plot.right - point.plot.left) / MAX_BARS * state.viewScale;
-        const selectedBar = state.bars[state.selected];
-        let handle = null;
-        if (selectedBar) {
-          const centerX = point.plot.left + (state.selected + 0.5 - state.viewStart) * slot;
-          const handles = [
-            ["high", yForPrice(selectedBar.high, priceRange, point.plot)],
-            ["open", yForPrice(selectedBar.open, priceRange, point.plot)],
-            ["close", yForPrice(selectedBar.close, priceRange, point.plot)],
-            ["low", yForPrice(selectedBar.low, priceRange, point.plot)]
-          ];
-          handle = handles.find(([, y]) => Math.hypot(point.x - centerX, point.y - y) < 13);
-          if (handle) {
-            remember();
-            const index = state.selected;
-            state.drawing = { adjusting: handle[0], index, range: { ...priceRange } };
-            canvas.setPointerCapture(event.pointerId);
-            renderChart();
-            return;
-          }
-        }
         const hit = candleAt(point);
+        const targetIndex = hit ? hit.index : state.selected;
+        const part = hit ? candlePartAt(point, hit.index, point.plot) : null;
         if (hit) state.selected = hit.index;
+        if (part) {
+          remember();
+          state.drawing = { adjusting: part, index: targetIndex, range: { ...priceRange } };
+          canvas.setPointerCapture(event.pointerId);
+          renderChart();
+          return;
+        }
         state.drawing = {
           panning: true,
           moved: false,

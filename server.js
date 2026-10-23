@@ -113,25 +113,32 @@ app.post("/api/generate-logic", async (req, res) => {
         body: JSON.stringify({
           systemInstruction: { parts: [{ text: systemPrompt }] },
           contents: [{ role: "user", parts: [{ text: userPrompt }] }],
-          generationConfig: { temperature: 0.2, maxOutputTokens: 1300 }
+          // Gemini 3.6+ ignores sampling settings; keep only the output limit.
+          generationConfig: { maxOutputTokens: 1800 }
         }),
         signal: AbortSignal.timeout(25_000)
       }
     );
     const data = await response.json().catch(() => ({}));
     if (!response.ok) {
-      console.error("Gemini API request failed with status:", response.status);
+      const providerMessage = data.error?.message;
+      console.error("Gemini API request failed:", response.status, providerMessage || "No provider message");
       return res.status(response.status === 429 ? 429 : 502).json({
         error: response.status === 429
           ? "โควตา Gemini เต็มชั่วคราว กรุณาลองใหม่ภายหลัง"
-          : "เรียก Gemini ไม่สำเร็จ ตรวจสอบ API key, Billing และชื่อโมเดล"
+          : "Gemini ตอบกลับ " + response.status + ": " + (providerMessage || "ตรวจสอบ API key, Billing และชื่อโมเดลใน Render")
       });
     }
-    const logic = (data.candidates?.[0]?.content?.parts || [])
+    const candidate = data.candidates?.[0];
+    const logic = (candidate?.content?.parts || [])
       .map(part => part.text || "")
       .join("\n")
       .trim();
-    if (!logic) return res.status(502).json({ error: "Gemini ไม่ส่ง logic กลับมา ลองใหม่อีกครั้ง" });
+    if (!logic) {
+      const reason = candidate?.finishReason || data.promptFeedback?.blockReason || "ไม่ทราบสาเหตุ";
+      console.error("Gemini returned no text:", reason);
+      return res.status(502).json({ error: "Gemini ไม่ส่งข้อความกลับมา (" + reason + ") ลองใหม่อีกครั้ง" });
+    }
     res.json({ logic, model });
   } catch (error) {
     console.error("Logic generation failed:", error.message);

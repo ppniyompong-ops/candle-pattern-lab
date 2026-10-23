@@ -191,6 +191,21 @@
       ctx.strokeStyle = "rgba(221,248,235,.85)";
       ctx.lineWidth = 1;
       ctx.strokeRect(centerX - bodyWidth / 2 - 3, bodyTop - 3, bodyWidth + 6, bodyHeight + 6);
+      if (state.tool === "select") {
+        const handles = [
+          ["high", centerX, highY], ["open", centerX, openY],
+          ["close", centerX, closeY], ["low", centerX, lowY]
+        ];
+        handles.forEach(([key, x, y]) => {
+          ctx.beginPath();
+          ctx.arc(x, y, 4, 0, Math.PI * 2);
+          ctx.fillStyle = "#e8c98a";
+          ctx.fill();
+          ctx.strokeStyle = "#102019";
+          ctx.lineWidth = 1.5;
+          ctx.stroke();
+        });
+      }
     }
     ctx.restore();
   }
@@ -270,11 +285,11 @@
     const hints = {
       bull: "ลากจากราคาเปิดไปยังราคาปิด",
       bear: "ลากจากราคาเปิดไปยังราคาปิด",
-      select: "คลิกแท่งเทียนเพื่อเลือกและแก้ OHLC",
+      select: "คลิกจุดจับบนแท่งเพื่อปรับ Open / High / Low / Close",
       erase: "คลิกแท่งเทียนที่ต้องการลบ"
     };
     elements.toolHint.textContent = hints[tool];
-    canvas.style.cursor = tool === "select" ? "default" : tool === "erase" ? "not-allowed" : "crosshair";
+    canvas.style.cursor = tool === "erase" ? "not-allowed" : "crosshair";
   }
 
   function pointForEvent(event) {
@@ -305,7 +320,28 @@
     if (point.x < point.plot.left || point.x > point.plot.right || point.y < point.plot.top || point.y > point.plot.bottom) return;
     const requestedIndex = indexForX(point.x, point.plot);
     if (state.tool === "select") {
-      if (state.bars.length) setSelected(Math.min(requestedIndex, state.bars.length - 1));
+      if (state.bars.length) {
+        const index = Math.min(requestedIndex, state.bars.length - 1);
+        const bar = state.bars[index];
+        const slot = (point.plot.right - point.plot.left) / MAX_BARS;
+        const centerX = point.plot.left + slot * (index + 0.5);
+        const handles = [
+          ["high", yForPrice(bar.high, priceRange, point.plot)],
+          ["open", yForPrice(bar.open, priceRange, point.plot)],
+          ["close", yForPrice(bar.close, priceRange, point.plot)],
+          ["low", yForPrice(bar.low, priceRange, point.plot)]
+        ];
+        const handle = handles.find(([, y]) => Math.hypot(point.x - centerX, point.y - y) < 13);
+        if (handle) {
+          remember();
+          state.selected = index;
+          state.drawing = { adjusting: handle[0], index, range: { ...priceRange } };
+          canvas.setPointerCapture(event.pointerId);
+          renderChart();
+        } else {
+          setSelected(index);
+        }
+      }
       return;
     }
     if (state.tool === "erase") {
@@ -338,12 +374,29 @@
     const point = pointForEvent(event);
     const y = Math.max(point.plot.top, Math.min(point.plot.bottom, point.y));
     const fraction = Math.max(0, Math.min(1, (y - point.plot.top) / (point.plot.bottom - point.plot.top)));
+    if (state.drawing.adjusting) {
+      const bar = state.bars[state.drawing.index];
+      const range = state.drawing.range;
+      const price = range.max - fraction * (range.max - range.min);
+      const key = state.drawing.adjusting;
+      if (key === "high") bar.high = Math.max(price, bar.open, bar.close);
+      if (key === "low") bar.low = Math.min(price, bar.open, bar.close);
+      if (key === "open") { bar.open = price; bar.high = Math.max(bar.high, price); bar.low = Math.min(bar.low, price); }
+      if (key === "close") { bar.close = price; bar.high = Math.max(bar.high, price); bar.low = Math.min(bar.low, price); }
+      renderChart();
+      return;
+    }
     state.drawing.endPrice = state.drawing.range.max - fraction * (state.drawing.range.max - state.drawing.range.min);
     renderChart();
   });
 
   function finishDrawing() {
     if (!state.drawing) return;
+    if (state.drawing.adjusting) {
+      state.drawing = null;
+      render();
+      return;
+    }
     const preview = getPreviewBar();
     if (!preview) return;
     remember();

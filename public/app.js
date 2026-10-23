@@ -389,6 +389,20 @@
         : state.pathDraft.points;
       drawAnnotation({ kind: "path", points }, plot, range, true);
     }
+    if (state.drawing?.zooming) {
+      const left = Math.max(plot.left, Math.min(state.drawing.startX, state.drawing.currentX));
+      const top = Math.max(plot.top, Math.min(state.drawing.startY, state.drawing.currentY));
+      const right = Math.min(plot.right, Math.max(state.drawing.startX, state.drawing.currentX));
+      const bottom = Math.min(plot.bottom, Math.max(state.drawing.startY, state.drawing.currentY));
+      ctx.save();
+      ctx.fillStyle = "rgba(120,185,245,.14)";
+      ctx.strokeStyle = "rgba(120,185,245,.9)";
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([5, 4]);
+      ctx.fillRect(left, top, right - left, bottom - top);
+      ctx.strokeRect(left, top, right - left, bottom - top);
+      ctx.restore();
+    }
     elements.emptyHint.classList.toggle("hidden", state.bars.length > 0 || state.lines.length > 0 ||
       ["line", "level", "rectangle"].includes(state.drawing?.kind) || Boolean(state.pathDraft));
   }
@@ -474,6 +488,7 @@
       bull: "เริ่มลากจาก Open ไปยัง Close",
       bear: "เริ่มลากจาก Open ไปยัง Close",
       select: "ลากกราฟเพื่อเลื่อน · ลากจุดจับเพื่อปรับแท่งหรือปลายเส้น",
+      zoom: "ลากคลุมช่วงบนกราฟเพื่อซูมเข้า · ใช้ปุ่ม − เพื่อซูมออก",
       erase: "คลิกแท่งหรือเส้นที่ต้องการลบ",
       line: "ลากเพื่อวาดเส้นอิสระ",
       path: "คลิกเพิ่มจุดหัก · คลิกจุดล่าสุดหรือดับเบิลคลิกเพื่อจบ",
@@ -673,6 +688,18 @@
     if (event.button !== 0) return;
     const point = pointForEvent(event);
     if (point.x < point.plot.left || point.x > point.plot.right || point.y < point.plot.top || point.y > point.plot.bottom) return;
+    if (state.tool === "zoom") {
+      state.drawing = {
+        zooming: true,
+        startX: point.x,
+        startY: point.y,
+        currentX: point.x,
+        currentY: point.y
+      };
+      canvas.setPointerCapture(event.pointerId);
+      renderChart();
+      return;
+    }
     const requestedIndex = indexForX(point.x, point.plot);
     if (state.tool === "select") {
       const line = annotationAt(point);
@@ -846,6 +873,12 @@
       }
       return;
     }
+    if (state.drawing.zooming) {
+      state.drawing.currentX = Math.max(point.plot.left, Math.min(point.plot.right, point.x));
+      state.drawing.currentY = Math.max(point.plot.top, Math.min(point.plot.bottom, point.y));
+      renderChart();
+      return;
+    }
     if (state.drawing.adjustingAnnotationPoint) {
       const drawing = state.drawing;
       const line = state.lines.find(item => item.id === drawing.adjustingAnnotationPoint.id);
@@ -929,6 +962,23 @@
 
   function finishDrawing() {
     if (!state.drawing) return;
+    if (state.drawing.zooming) {
+      const draft = state.drawing;
+      state.drawing = null;
+      const plot = chartPlot();
+      const left = Math.max(plot.left, Math.min(draft.startX, draft.currentX));
+      const right = Math.min(plot.right, Math.max(draft.startX, draft.currentX));
+      const top = Math.max(plot.top, Math.min(draft.startY, draft.currentY));
+      const bottom = Math.min(plot.bottom, Math.max(draft.startY, draft.currentY));
+      if (right - left < 12 || bottom - top < 8) {
+        renderChart();
+        showToast("ลากคลุมช่วงที่ต้องการซูมเข้า");
+        return;
+      }
+      const zoomFactor = (plot.right - plot.left) / (right - left);
+      setZoom(state.viewScale * zoomFactor, (left + right) / 2);
+      return;
+    }
     if (state.drawing.panning) {
       const moved = state.drawing.moved;
       state.drawing = null;

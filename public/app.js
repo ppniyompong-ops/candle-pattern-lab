@@ -257,8 +257,8 @@
       ctx.strokeRect(centerX - bodyWidth / 2 - 3, bodyTop - 3, bodyWidth + 6, bodyHeight + 6);
       if (state.tool === "select") {
         const handles = [
-          ["high", centerX, highY], ["open", centerX, openY],
-          ["close", centerX, closeY], ["low", centerX, lowY]
+          ["high", centerX, highY], ["open", centerX - bodyWidth / 2, openY],
+          ["close", centerX + bodyWidth / 2, closeY], ["low", centerX, lowY]
         ];
         handles.forEach(([key, x, y]) => {
           ctx.beginPath();
@@ -388,7 +388,7 @@
     const plot = chartPlot();
     clampViewStart(plot);
     const preview = getPreviewBar();
-    const range = state.drawing?.adjusting
+    const range = (state.drawing?.adjusting || state.drawing?.movingCandle !== undefined)
       ? state.drawing.range
       : state.lockedPriceRange || currentRange(preview?.bar);
     priceRange = range;
@@ -429,11 +429,22 @@
     if (!bar) {
       elements.selectedLabel.textContent = "NO BAR";
       elements.selectedReadout.textContent = "วาดหรือเลือกแท่งเทียนเพื่อปรับรูปทรง";
+      ["open", "high", "low", "close"].forEach(key => {
+        const value = document.getElementById("value-" + key);
+        if (value) value.textContent = "—";
+      });
       return;
     }
     const label = String(state.selected + 1).padStart(2, "0");
     elements.selectedLabel.textContent = "BAR " + label;
     elements.selectedReadout.textContent = "เลือกแท่งแล้ว · ลากจุดจับเพื่อปรับสัดส่วน";
+    const min = Math.min(...state.bars.map(item => item.low));
+    const max = Math.max(...state.bars.map(item => item.high));
+    const span = max - min || 1;
+    ["open", "high", "low", "close"].forEach(key => {
+      const value = document.getElementById("value-" + key);
+      if (value) value.textContent = Math.round((bar[key] - min) / span * 100) + "%";
+    });
   }
 
   function updateCounts() {
@@ -594,16 +605,21 @@
     const closeY = yForPrice(bar.close, priceRange, plot);
     const bodyTop = Math.min(openY, closeY);
     const bodyBottom = Math.max(openY, closeY);
-    const hitRadius = 10;
-    if (point.y <= bodyTop + hitRadius &&
-        distanceToSegment(point.x, point.y, centerX, highY, centerX, bodyTop) <= hitRadius) return "high";
-    if (point.y >= bodyBottom - hitRadius &&
-        distanceToSegment(point.x, point.y, centerX, bodyBottom, centerX, lowY) <= hitRadius) return "low";
-    if (point.y >= bodyTop - hitRadius && point.y <= bodyBottom + hitRadius) {
-      return Math.abs(point.y - openY) <= Math.abs(point.y - closeY) ? "open" : "close";
-    }
-    if (Math.abs(point.y - highY) <= hitRadius) return "high";
-    if (Math.abs(point.y - lowY) <= hitRadius) return "low";
+    const hitRadius = 8;
+    const dx = Math.abs(point.x - centerX);
+    const wickHit = dx <= hitRadius + 1;
+    const highWickLength = bodyTop - highY;
+    const lowWickLength = lowY - bodyBottom;
+
+    // Give the wick its own hit area before checking the body. This prevents
+    // a wick drag from being interpreted as an Open/Close edit on narrow candles.
+    if (wickHit && highWickLength >= 3 && point.y <= bodyTop + 1 && point.y >= highY - hitRadius) return "high";
+    if (wickHit && lowWickLength >= 3 && point.y >= bodyBottom - 1 && point.y <= lowY + hitRadius) return "low";
+
+    // Open and Close are adjusted only from their visible body edges/handles,
+    // not from any point inside the candle body.
+    if (Math.hypot(point.x - (centerX - bodyWidth / 2), point.y - openY) <= hitRadius) return "open";
+    if (Math.hypot(point.x - (centerX + bodyWidth / 2), point.y - closeY) <= hitRadius) return "close";
     return null;
   }
 
@@ -701,7 +717,7 @@
     const plot = chartPlot();
     const oldSlot = (plot.right - plot.left) / MAX_BARS * state.viewScale;
     const anchorIndex = state.viewStart + (anchorX - plot.left) / oldSlot;
-    state.viewScale = Math.max(0.7, Math.min(4, nextScale));
+    state.viewScale = Math.max(0.2, Math.min(4, nextScale));
     const newSlot = (plot.right - plot.left) / MAX_BARS * state.viewScale;
     state.viewStart = anchorIndex - (anchorX - plot.left) / newSlot;
     clampViewStart(plot);
@@ -715,7 +731,7 @@
     const zoomIn = document.getElementById("zoom-in");
     const zoomOut = document.getElementById("zoom-out");
     if (zoomIn) zoomIn.disabled = state.viewScale >= 4;
-    if (zoomOut) zoomOut.disabled = state.viewScale <= 0.7;
+    if (zoomOut) zoomOut.disabled = state.viewScale <= 0.2;
   }
 
   function fitChart() {
@@ -782,9 +798,31 @@
         const part = hit ? candlePartAt(point, hit.index, point.plot) : null;
         if (hit) state.selected = hit.index;
         if (part) {
-          remember();
-          state.drawing = { adjusting: part, index: targetIndex, range: { ...priceRange } };
+          state.drawing = { adjusting: part, index: targetIndex, range: { ...priceRange }, moved: false, startX: point.x, startY: point.y };
           canvas.setPointerCapture(event.pointerId);
+          renderChart();
+          return;
+        }
+        if (hit) {
+          const bar = state.bars[targetIndex];
+          const slot = (point.plot.right - point.plot.left) / MAX_BARS * state.viewScale;
+          const centerX = point.plot.left + (targetIndex + 0.5 - state.viewStart) * slot;
+          const bodyWidth = Math.min(26, Math.max(7, slot * 0.38));
+          const openY = yForPrice(bar.open, priceRange, point.plot);
+          const closeY = yForPrice(bar.close, priceRange, point.plot);
+          const insideBody = Math.abs(point.x - centerX) <= bodyWidth / 2 + 2 &&
+            point.y >= Math.min(openY, closeY) - 2 && point.y <= Math.max(openY, closeY) + 2;
+          if (insideBody) {
+            state.drawing = {
+              movingCandle: targetIndex,
+              moved: false,
+              startX: point.x,
+              startY: point.y,
+              range: { ...priceRange },
+              originalBar: { ...bar }
+            };
+            canvas.setPointerCapture(event.pointerId);
+          }
           renderChart();
           return;
         }
@@ -936,6 +974,26 @@
       }
       return;
     }
+    if (state.drawing.movingCandle !== undefined) {
+      const drawing = state.drawing;
+      const distance = Math.hypot(point.x - drawing.startX, point.y - drawing.startY);
+      if (distance > 2) {
+        if (!drawing.moved) {
+          remember();
+          drawing.moved = true;
+        }
+        const bar = state.bars[drawing.movingCandle];
+        const clampedY = Math.max(point.plot.top, Math.min(point.plot.bottom, point.y));
+        const delta = -(clampedY - drawing.startY) / (point.plot.bottom - point.plot.top) *
+          (drawing.range.max - drawing.range.min);
+        ["open", "high", "low", "close"].forEach(key => {
+          bar[key] = drawing.originalBar[key] + delta;
+        });
+        updateInspector();
+        renderChart();
+      }
+      return;
+    }
     if (state.drawing.movingLine) {
       const drawing = state.drawing;
       const line = state.lines.find(item => item.id === drawing.movingLine);
@@ -991,10 +1049,15 @@
       const range = state.drawing.range;
       const price = range.max - fraction * (range.max - range.min);
       const key = state.drawing.adjusting;
+      if (Math.hypot(point.x - state.drawing.startX, point.y - state.drawing.startY) > 2 && !state.drawing.moved) {
+        remember();
+        state.drawing.moved = true;
+      }
       if (key === "high") bar.high = Math.max(price, bar.open, bar.close);
       if (key === "low") bar.low = Math.min(price, bar.open, bar.close);
       if (key === "open") { bar.open = price; bar.high = Math.max(bar.high, price); bar.low = Math.min(bar.low, price); }
       if (key === "close") { bar.close = price; bar.high = Math.max(bar.high, price); bar.low = Math.min(bar.low, price); }
+      updateInspector();
       renderChart();
       return;
     }
@@ -1040,7 +1103,13 @@
       return;
     }
     if (state.drawing.adjusting) {
-      state.lockedPriceRange = { ...state.drawing.range };
+      if (state.drawing.moved) state.lockedPriceRange = { ...state.drawing.range };
+      state.drawing = null;
+      render();
+      return;
+    }
+    if (state.drawing.movingCandle !== undefined) {
+      if (state.drawing.moved) state.lockedPriceRange = { ...state.drawing.range };
       state.drawing = null;
       render();
       return;
@@ -1100,6 +1169,7 @@
 
   canvas.addEventListener("wheel", event => {
     event.preventDefault();
+    if (state.drawing) return;
     const point = pointForEvent(event);
     if (event.shiftKey || Math.abs(event.deltaX) > Math.abs(event.deltaY)) {
       const slot = (point.plot.right - point.plot.left) / MAX_BARS * state.viewScale;
@@ -1498,19 +1568,34 @@
     elements.generateButton.querySelector(".sparkle").textContent = "◌";
     showLogicMessage("กำลังอ่านแท่ง เส้น และคำอธิบายเพื่อสร้างตัวเลือก…");
     try {
-      const response = await fetch("/api/generate-logic", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+      const requestBody = JSON.stringify({
           patternName: elements.name.value.trim() || "Untitled pattern",
           bias: elements.bias.value,
           timeframe: elements.timeframe.value,
           description: elements.description.value.trim(),
           candles: normalizePatternBars(state.bars),
           lines: normalizePatternLines(state.lines, state.bars)
-        })
       });
-      const data = await response.json().catch(() => ({}));
+      let response;
+      let data = {};
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        try {
+          response = await fetch("/api/generate-logic", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: requestBody
+          });
+          data = await response.json().catch(() => ({}));
+        } catch (requestError) {
+          if (attempt === 2) throw requestError;
+          elements.generateLabel.textContent = "การเชื่อมต่อสะดุด กำลังลองใหม่…";
+          await new Promise(resolve => window.setTimeout(resolve, 800 * (attempt + 1)));
+          continue;
+        }
+        if (response.ok || ![429, 502, 503, 504].includes(response.status) || attempt === 2) break;
+        elements.generateLabel.textContent = "AI ยังไม่พร้อม กำลังลองใหม่…";
+        await new Promise(resolve => window.setTimeout(resolve, 900 * (attempt + 1)));
+      }
       if (!response.ok) throw new Error(data.error || "สร้าง logic ไม่สำเร็จ");
       if (!Array.isArray(data.options) || data.options.length !== 3) {
         throw new Error("AI ส่งตัวเลือกมาไม่ครบ ลองสร้างใหม่อีกครั้ง");

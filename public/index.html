@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#0b1118">
   <meta name="description" content="วาดแพตเทิร์นแท่งเทียนและให้ AI ช่วยเขียนกฎตรวจจับด้วย JavaScript">
-  <title>EALab</title>
+  <title>EALabtp sl entry · Candle Pattern Lab</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -16,7 +16,7 @@
     <aside class="sidebar">
       <a class="brand" href="#chart-title" aria-label="EALab">
         <span class="brand-mark">✦</span>
-        <span>EA<span class="brand-ai">Lab</span></span>
+        <span>EALab<span class="brand-ai">tp sl entry</span></span>
       </a>
       <div class="side-label">WORKSPACE</div>
       <nav class="sidebar-nav" aria-label="เมนูหลัก">
@@ -46,8 +46,8 @@
       <section class="page-heading">
         <div>
           <div class="eyebrow"><span class="eyebrow-line"></span>PRICE ACTION WORKSPACE</div>
-          <h1>EA<span>Lab</span></h1>
-          <p>วาดแท่งเทียนและเส้นระดับตามไอเดีย แล้วให้ AI ช่วยแปลงเป็นกฎตรวจจับ</p>
+          <h1>EALab<span>tp sl entry</span></h1>
+          <p>สร้างและแก้ไขแพตเทิร์นแท่งเทียน วางระดับ Entry / TP / SL แล้วให้ AI สรุป HLOC และสร้างรูปแบบขาขึ้นกับขาลง</p>
         </div>
         <div class="heading-badge"><span class="live-dot"></span><span>พร้อมสร้างแพตเทิร์น</span></div>
       </section>
@@ -108,7 +108,7 @@
               <span class="legend-spacer"></span>
               <span class="selected-readout" id="selected-readout">กราฟแสดงสัดส่วนแท่งเทียนโดยไม่แสดงราคา</span>
             </div>
-            <div class="chart-gesture-note">หมุนล้อเมาส์เพื่อซูม · กด Shift พร้อมล้อเมาส์เพื่อเลื่อน · เลือก “ซูม” แล้วลากคลุมช่วงเพื่อขยาย</div>
+            <div class="chart-gesture-note">โหมดเลือก: ลากไส้หรือจุด HLOC เพื่อแก้ · ลากตัวแท่งเพื่อย้ายแท่ง · ลากพื้นที่ว่างเพื่อเลื่อนกราฟ · ล้อเมาส์ซูมเข้าออกได้ถึง 20%</div>
           </section>
 
           <section class="panel editor-panel" aria-labelledby="editor-title">
@@ -120,6 +120,12 @@
               <span class="edit-lock"><span>●</span>แก้ไขรูปทรง</span>
             </div>
             <p class="editor-hint">เลือกเครื่องมือ “เลือก” แล้วลากจุดจับบนแท่งหรือเส้นเพื่อปรับภาพ ไม่ต้องใส่ราคา</p>
+            <div class="ohlc-inspector" aria-label="สัดส่วนแท่งที่เลือก">
+              <span><b>O</b><strong id="value-open">—</strong></span>
+              <span><b>H</b><strong id="value-high">—</strong></span>
+              <span><b>L</b><strong id="value-low">—</strong></span>
+              <span><b>C</b><strong id="value-close">—</strong></span>
+            </div>
           </section>
 
           <section class="panel saved-panel" aria-labelledby="saved-title">

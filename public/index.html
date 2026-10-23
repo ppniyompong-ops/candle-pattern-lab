@@ -74,13 +74,12 @@
                 <button class="tool-button" type="button" data-tool="select" aria-pressed="false"><span class="tool-glyph">⌖</span><span>เลือก</span></button>
                 <button class="tool-button" type="button" data-tool="erase" aria-pressed="false"><span class="tool-glyph">⌫</span><span>ลบแท่ง</span></button>
               </div>
-              <div class="toolbar-hint"><span class="hint-pip"></span><span id="tool-hint">ลากจากราคาเปิดไปยังราคาปิด</span></div>
+              <div class="toolbar-hint"><span class="hint-pip"></span><span id="tool-hint">เริ่มลากจาก Open ไปยัง Close</span></div>
             </div>
 
             <div class="chart-frame">
-              <div class="chart-y-labels" aria-hidden="true"><span id="axis-top">—</span><span id="axis-upper">—</span><span id="axis-mid">—</span><span id="axis-lower">—</span><span id="axis-bottom">—</span></div>
               <canvas id="candle-canvas" tabindex="0" role="application" aria-label="พื้นที่วาดกราฟแท่งเทียน ใช้เมาส์ลากเพื่อวาด เลือก หรือลบแท่ง"></canvas>
-              <div class="chart-empty hidden" id="empty-hint"><span>✳</span><strong>เริ่มวาดแพตเทิร์นของคุณ</strong><small>เลือกแท่งขึ้นหรือแท่งลง แล้วลากบนกราฟ</small></div>
+              <div class="chart-empty hidden" id="empty-hint"><span>✳</span><strong>เริ่มจากวาดหรือเล่ารูปแบบของคุณ</strong><small>วาดแท่งบนกราฟ หรือใช้คำอธิบายอย่างเดียวก็ได้</small></div>
               <div class="chart-navigation" aria-label="ควบคุมมุมมองกราฟ">
                 <button id="zoom-out" type="button" title="ซูมออก" aria-label="ซูมออก">−</button>
                 <span id="zoom-readout" aria-live="polite">100%</span>
@@ -94,7 +93,7 @@
               <span><i class="legend-candle up"></i> แท่งขึ้น</span>
               <span><i class="legend-candle down"></i> แท่งลง</span>
               <span class="legend-spacer"></span>
-              <span class="selected-readout" id="selected-readout">เลือกแท่งเทียนเพื่อแก้ค่า OHLC</span>
+              <span class="selected-readout" id="selected-readout">กราฟแสดงสัดส่วนแท่งเทียนโดยไม่แสดงราคา</span>
             </div>
             <div class="chart-gesture-note">โหมดเลือก: ลากกราฟเพื่อเลื่อน · หมุนล้อเมาส์เพื่อซูม</div>
           </section>
@@ -103,18 +102,11 @@
             <div class="panel-top editor-heading">
               <div>
                 <div class="panel-kicker">SELECTED CANDLE <span class="kicker-dot">•</span> <span id="selected-label">BAR 05</span></div>
-                <h2 id="editor-title">ปรับค่า OHLC</h2>
+                <h2 id="editor-title">ปรับรูปทรงแท่งเทียน</h2>
               </div>
-              <span class="edit-lock"><span>●</span>แก้ไขได้</span>
+              <span class="edit-lock"><span>●</span>แก้ไขรูปทรง</span>
             </div>
-            <form id="ohlc-form" class="ohlc-grid">
-              <label class="ohlc-field open-field"><span><i></i> OPEN</span><div><small>ราคาเปิด</small><input id="ohlc-open" type="number" step="any" inputmode="decimal" aria-label="ราคาเปิด"></div></label>
-              <label class="ohlc-field high-field"><span><i></i> HIGH</span><div><small>ราคาสูงสุด</small><input id="ohlc-high" type="number" step="any" inputmode="decimal" aria-label="ราคาสูงสุด"></div></label>
-              <label class="ohlc-field low-field"><span><i></i> LOW</span><div><small>ราคาต่ำสุด</small><input id="ohlc-low" type="number" step="any" inputmode="decimal" aria-label="ราคาต่ำสุด"></div></label>
-              <label class="ohlc-field close-field"><span><i></i> CLOSE</span><div><small>ราคาปิด</small><input id="ohlc-close" type="number" step="any" inputmode="decimal" aria-label="ราคาปิด"></div></label>
-              <button class="apply-button" type="submit">อัปเดตแท่ง <span>↗</span></button>
-            </form>
-            <p class="form-error" id="ohlc-error" role="alert"></p>
+            <p class="editor-hint">เลือกเครื่องมือ “เลือก” แล้วลากจุดจับ Open / High / Low / Close บนแท่ง เพื่อปรับสัดส่วน ไม่ต้องใส่ราคา</p>
           </section>
 
           <section class="panel saved-panel" aria-labelledby="saved-title">
@@ -146,11 +138,14 @@
               <div><div class="panel-kicker">GEMINI ASSIST</div><h2 id="ai-title">ให้ AI เขียน logic</h2></div>
               <span class="ai-status">AI</span>
             </div>
-            <p class="ai-description">ส่งรูปแบบ OHLC ที่วาดให้ Stock Co-Pilot ช่วยสร้าง JavaScript function สำหรับตรวจจับแพตเทิร์นนี้</p>
+            <p class="ai-description">วาดรูปแบบและอธิบายคร่าว ๆ แล้ว Gemini จะเสนอ logic 3 แบบให้เลือกแบบที่ตรงที่สุด</p>
+            <label class="field-label" for="pattern-description">อธิบายแพตเทิร์นคร่าว ๆ</label>
+            <textarea id="pattern-description" class="description-input" maxlength="1200" rows="4" placeholder="เช่น มีแท่งลงยาว 2 แท่ง แล้วตามด้วยแท่งขึ้นที่มีไส้ล่างยาว ปิดเหนือครึ่งหนึ่งของแท่งก่อนหน้า"></textarea>
+            <p class="description-hint">วาดประกอบหรือใช้คำอธิบายอย่างเดียวก็ได้</p>
             <div class="ai-context">
               <div><span class="context-icon">▥</span><span>อินพุต</span><strong id="ai-bar-count">5 candles</strong></div>
-              <div><span class="context-icon">⌘</span><span>เอาต์พุต</span><strong>JavaScript</strong></div>
-              <div><span class="context-icon">◎</span><span>โหมด</span><strong>Rule based</strong></div>
+              <div><span class="context-icon">⌘</span><span>ตัวเลือก</span><strong>3 แบบ</strong></div>
+              <div><span class="context-icon">◎</span><span>เอาต์พุต</span><strong>JavaScript</strong></div>
             </div>
             <button class="generate-button" id="generate-logic" type="button"><span class="sparkle">✦</span><span id="generate-label">สร้าง logic ด้วย AI</span><span class="button-arrow">↗</span></button>
             <div class="ai-note"><span>ⓘ</span><span>AI อาจตีความรูปแบบคลาดเคลื่อน โปรดตรวจโค้ดและทดสอบกับข้อมูลย้อนหลัง</span></div>
@@ -162,7 +157,9 @@
               <button id="copy-logic" class="copy-button" type="button" disabled><span>▣</span>คัดลอก</button>
             </div>
             <div class="logic-body" id="logic-body">
-              <div class="logic-placeholder"><span class="placeholder-icon">⌘</span><strong>logic จะปรากฏที่นี่</strong><p>วาดแท่งเทียนอย่างน้อย 1 แท่ง แล้วให้ AI เสนอ function สำหรับตรวจจับแพตเทิร์น</p></div>
+              <div class="logic-placeholder"><span class="placeholder-icon">⌘</span><strong>เลือก logic ที่ตรงกับไอเดีย</strong><p>วาดแท่งเทียนและเขียนคำอธิบาย แล้ว AI จะสร้างตัวเลือก 3 แบบให้เปรียบเทียบ</p></div>
+              <div id="logic-options" class="logic-options hidden" role="radiogroup" aria-label="เลือก logic ที่ต้องการ"></div>
+              <p id="selected-option-summary" class="selected-option-summary hidden"></p>
               <pre id="logic-output" class="hidden" aria-live="polite"></pre>
             </div>
             <div class="logic-foot"><span><i class="logic-dot"></i> JavaScript</span><button id="download-logic" type="button" disabled>ดาวน์โหลด .js <span>↓</span></button></div>

@@ -20,15 +20,11 @@
     drawing: null,
     undo: [],
     redo: [],
+    options: [],
+    selectedOptionId: "",
     logic: "",
     viewScale: 1,
     viewStart: 0
-  };
-  const fields = {
-    open: document.getElementById("ohlc-open"),
-    high: document.getElementById("ohlc-high"),
-    low: document.getElementById("ohlc-low"),
-    close: document.getElementById("ohlc-close")
   };
   const elements = {
     barCount: document.getElementById("bar-count"),
@@ -36,17 +32,18 @@
     selectedLabel: document.getElementById("selected-label"),
     selectedReadout: document.getElementById("selected-readout"),
     latestBar: document.getElementById("latest-bar-label"),
-    axis: ["axis-top", "axis-upper", "axis-mid", "axis-lower", "axis-bottom"].map(id => document.getElementById(id)),
     emptyHint: document.getElementById("empty-hint"),
     undoButton: document.getElementById("undo-button"),
     redoButton: document.getElementById("redo-button"),
     name: document.getElementById("pattern-name"),
     bias: document.getElementById("pattern-bias"),
     timeframe: document.getElementById("pattern-timeframe"),
-    formError: document.getElementById("ohlc-error"),
+    description: document.getElementById("pattern-description"),
     savedPatterns: document.getElementById("saved-patterns"),
     savedCount: document.getElementById("saved-count"),
     logicPlaceholder: document.querySelector(".logic-placeholder"),
+    logicOptions: document.getElementById("logic-options"),
+    selectedOptionSummary: document.getElementById("selected-option-summary"),
     logicOutput: document.getElementById("logic-output"),
     generateButton: document.getElementById("generate-logic"),
     generateLabel: document.getElementById("generate-label"),
@@ -74,12 +71,6 @@
   function updateHistoryButtons() {
     elements.undoButton.disabled = state.undo.length === 0;
     elements.redoButton.disabled = state.redo.length === 0;
-  }
-
-  function formatPrice(value) {
-    if (!Number.isFinite(value)) return "—";
-    const digits = Math.abs(value) >= 1000 ? 1 : Math.abs(value) >= 1 ? 2 : 4;
-    return value.toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: digits });
   }
 
   function chartPlot() {
@@ -131,15 +122,12 @@
     renderChart();
   }
 
-  function drawGrid(plot, range) {
+  function drawGrid(plot) {
     const styles = getComputedStyle(document.documentElement);
     const gridColor = styles.getPropertyValue("--line-soft").trim() || "rgba(158,180,194,.12)";
-    const labelValues = [];
     ctx.lineWidth = 1;
     for (let i = 0; i <= 4; i += 1) {
       const y = plot.top + ((plot.bottom - plot.top) * i) / 4;
-      const value = range.max - ((range.max - range.min) * i) / 4;
-      labelValues.push(value);
       ctx.beginPath();
       ctx.setLineDash(i === 0 || i === 4 ? [] : [2, 5]);
       ctx.strokeStyle = gridColor;
@@ -160,9 +148,6 @@
       ctx.lineTo(Math.round(x) + 0.5, plot.bottom);
       ctx.stroke();
     }
-    labelValues.forEach((value, index) => {
-      elements.axis[index].textContent = formatPrice(value);
-    });
   }
 
   function drawCandle(bar, index, plot, range, preview) {
@@ -241,7 +226,7 @@
     const range = currentRange(preview?.bar);
     priceRange = range;
     ctx.clearRect(0, 0, chartSize.width, chartSize.height);
-    drawGrid(plot, range);
+    drawGrid(plot);
     state.bars.forEach((bar, index) => drawCandle(bar, index, plot, range, false));
     if (preview) drawCandle(preview.bar, preview.index, plot, range, true);
     elements.emptyHint.classList.toggle("hidden", state.bars.length > 0);
@@ -249,30 +234,30 @@
 
   function updateInspector() {
     const bar = state.bars[state.selected];
-    const disabled = !bar;
-    Object.values(fields).forEach(input => { input.disabled = disabled; });
-    elements.formError.textContent = "";
     if (!bar) {
-      Object.values(fields).forEach(input => { input.value = ""; });
       elements.selectedLabel.textContent = "NO BAR";
-      elements.selectedReadout.textContent = "ยังไม่มีแท่งเทียน";
+      elements.selectedReadout.textContent = "วาดหรือเลือกแท่งเทียนเพื่อปรับรูปทรง";
       return;
     }
-    fields.open.value = Number(bar.open.toFixed(4));
-    fields.high.value = Number(bar.high.toFixed(4));
-    fields.low.value = Number(bar.low.toFixed(4));
-    fields.close.value = Number(bar.close.toFixed(4));
     const label = String(state.selected + 1).padStart(2, "0");
     elements.selectedLabel.textContent = "BAR " + label;
-    elements.selectedReadout.textContent =
-      "O " + formatPrice(bar.open) + "   H " + formatPrice(bar.high) +
-      "   L " + formatPrice(bar.low) + "   C " + formatPrice(bar.close);
+    elements.selectedReadout.textContent = "เลือกแท่งแล้ว · ลากจุดจับเพื่อปรับสัดส่วน";
   }
 
   function updateCounts() {
     elements.barCount.textContent = state.bars.length + (state.bars.length === 1 ? " BAR" : " BARS");
     elements.aiBarCount.textContent = state.bars.length + (state.bars.length === 1 ? " candle" : " candles");
     elements.latestBar.textContent = String(state.bars.length).padStart(2, "0");
+  }
+
+  function normalizePatternBars(bars) {
+    if (!bars.length) return [];
+    const min = Math.min(...bars.map(bar => bar.low));
+    const max = Math.max(...bars.map(bar => bar.high));
+    const span = max - min || 1;
+    return bars.map(bar => Object.fromEntries(
+      ["open", "high", "low", "close"].map(key => [key, Number(((bar[key] - min) / span).toFixed(6))])
+    ));
   }
 
   function render() {
@@ -290,8 +275,8 @@
       button.setAttribute("aria-pressed", String(active));
     });
     const hints = {
-      bull: "ลากจากราคาเปิดไปยังราคาปิด",
-      bear: "ลากจากราคาเปิดไปยังราคาปิด",
+      bull: "เริ่มลากจาก Open ไปยัง Close",
+      bear: "เริ่มลากจาก Open ไปยัง Close",
       select: "คลิกจุดจับบนแท่งเพื่อปรับ Open / High / Low / Close",
       erase: "คลิกแท่งเทียนที่ต้องการลบ"
     };
@@ -550,32 +535,6 @@
     showToast("ล้างแท่งเทียนแล้ว");
   });
 
-  document.getElementById("ohlc-form").addEventListener("submit", event => {
-    event.preventDefault();
-    const values = Object.fromEntries(Object.entries(fields).map(([key, input]) => [key, Number(input.value)]));
-    if (!Object.values(values).every(Number.isFinite) || Object.values(fields).some(input => input.value.trim() === "")) {
-      elements.formError.textContent = "กรุณากรอกราคา OHLC ให้ครบและเป็นตัวเลข";
-      return;
-    }
-    if (values.low <= 0 || values.high < Math.max(values.open, values.close) || values.low > Math.min(values.open, values.close)) {
-      elements.formError.textContent = "ตรวจสอบลำดับราคา: High ต้องสูงกว่า Open/Close และ Low ต้องต่ำกว่า Open/Close";
-      return;
-    }
-    if (state.selected < 0 || !state.bars[state.selected]) {
-      elements.formError.textContent = "เลือกหรือวาดแท่งเทียนก่อนแก้ค่า";
-      return;
-    }
-    remember();
-    state.bars[state.selected] = {
-      open: values.open,
-      high: values.high,
-      low: values.low,
-      close: values.close
-    };
-    render();
-    showToast("อัปเดตค่า OHLC แล้ว");
-  });
-
   function getSavedPatterns() {
     try {
       const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
@@ -643,6 +602,7 @@
       name: elements.name.value.trim() || "Untitled pattern",
       bias: elements.bias.value,
       timeframe: elements.timeframe.value,
+      description: elements.description.value.trim(),
       candles: cloneBars(state.bars),
       savedAt: new Date().toISOString()
     };
@@ -670,30 +630,74 @@
     elements.name.value = item.name || "Untitled pattern";
     elements.bias.value = item.bias || "neutral";
     elements.timeframe.value = item.timeframe || "Any";
+    elements.description.value = item.description || "";
     render();
     window.scrollTo({ top: 0, behavior: "smooth" });
     showToast("โหลดแพตเทิร์นแล้ว");
   });
 
-  function extractCode(text) {
-    const fence = String.fromCharCode(96).repeat(3);
-    const firstFence = text.indexOf(fence);
-    if (firstFence < 0) return text.trim();
-    const contentStart = text.indexOf("\n", firstFence + fence.length);
-    if (contentStart < 0) return text.slice(firstFence + fence.length).trim();
-    const nextFence = text.indexOf(fence, contentStart + 1);
-    const code = text.slice(contentStart + 1, nextFence < 0 ? text.length : nextFence).trim();
-    return code.replace(/^(javascript|js)\s*\n/i, "");
+  function showLogicMessage(message) {
+    state.options = [];
+    state.selectedOptionId = "";
+    state.logic = "";
+    elements.logicOptions.replaceChildren();
+    elements.logicOptions.classList.add("hidden");
+    elements.selectedOptionSummary.classList.add("hidden");
+    elements.logicOutput.classList.add("hidden");
+    elements.logicPlaceholder.classList.remove("hidden");
+    elements.logicPlaceholder.querySelector("strong").textContent = message;
+    elements.logicPlaceholder.querySelector("p").textContent = "";
+    elements.copyButton.disabled = true;
+    elements.downloadButton.disabled = true;
   }
 
-  function showLogic(text, canUse) {
-    state.logic = canUse ? text : "";
-    elements.logicPlaceholder.classList.add("hidden");
+  function selectLogicOption(id) {
+    const option = state.options.find(item => item.id === id);
+    if (!option) return;
+    state.selectedOptionId = id;
+    state.logic = option.code;
+    elements.logicOptions.querySelectorAll(".logic-option").forEach(button => {
+      const selected = button.dataset.optionId === id;
+      button.classList.toggle("selected", selected);
+      button.setAttribute("aria-checked", String(selected));
+    });
+    elements.selectedOptionSummary.textContent = option.summary;
+    elements.selectedOptionSummary.classList.remove("hidden");
+    elements.logicOutput.textContent = option.code;
     elements.logicOutput.classList.remove("hidden");
-    elements.logicOutput.textContent = text;
-    const ready = Boolean(canUse && text);
-    elements.copyButton.disabled = !ready;
-    elements.downloadButton.disabled = !ready;
+    elements.copyButton.disabled = false;
+    elements.downloadButton.disabled = false;
+  }
+
+  function showLogicOptions(options) {
+    state.options = options;
+    state.selectedOptionId = "";
+    state.logic = "";
+    elements.logicPlaceholder.classList.add("hidden");
+    elements.logicOptions.replaceChildren();
+    elements.logicOptions.classList.remove("hidden");
+    elements.selectedOptionSummary.classList.add("hidden");
+    elements.logicOutput.classList.add("hidden");
+    elements.copyButton.disabled = true;
+    elements.downloadButton.disabled = true;
+
+    options.forEach(option => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "logic-option";
+      button.dataset.optionId = option.id;
+      button.setAttribute("role", "radio");
+      button.setAttribute("aria-checked", "false");
+      const title = document.createElement("strong");
+      title.textContent = option.title;
+      const summary = document.createElement("span");
+      summary.textContent = option.summary;
+      const marker = document.createElement("i");
+      marker.className = "option-radio";
+      button.append(marker, title, summary);
+      button.addEventListener("click", () => selectLogicOption(option.id));
+      elements.logicOptions.append(button);
+    });
   }
 
   function showToast(message) {
@@ -704,14 +708,14 @@
   }
 
   elements.generateButton.addEventListener("click", async () => {
-    if (!state.bars.length) {
-      showToast("วาดแท่งเทียนอย่างน้อย 1 แท่งก่อนให้ AI เขียน logic");
+    if (!state.bars.length && !elements.description.value.trim()) {
+      showToast("วาดแท่งเทียนหรือเขียนคำอธิบายแพตเทิร์นก่อน");
       return;
     }
     elements.generateButton.disabled = true;
     elements.generateLabel.textContent = "กำลังวิเคราะห์รูปแบบ…";
     elements.generateButton.querySelector(".sparkle").textContent = "◌";
-    showLogic("กำลังส่งข้อมูล OHLC ให้ AI ช่วยสร้าง logic…", false);
+    showLogicMessage("กำลังอ่านรูปวาดและคำอธิบายเพื่อสร้างตัวเลือก…");
     try {
       const response = await fetch("/api/generate-logic", {
         method: "POST",
@@ -720,15 +724,19 @@
           patternName: elements.name.value.trim() || "Untitled pattern",
           bias: elements.bias.value,
           timeframe: elements.timeframe.value,
-          candles: state.bars
+          description: elements.description.value.trim(),
+          candles: normalizePatternBars(state.bars)
         })
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data.error || "สร้าง logic ไม่สำเร็จ");
-      showLogic(data.logic || "AI ไม่ได้ส่ง logic กลับมา", true);
-      showToast("สร้าง logic แล้ว · " + (data.model || "Gemini"));
+      if (!Array.isArray(data.options) || data.options.length !== 3) {
+        throw new Error("AI ส่งตัวเลือกมาไม่ครบ ลองสร้างใหม่อีกครั้ง");
+      }
+      showLogicOptions(data.options);
+      showToast("ได้ logic 3 แบบแล้ว เลือกแบบที่ตรงที่สุด");
     } catch (error) {
-      showLogic(error.message || "เกิดข้อผิดพลาดขณะเรียก AI", false);
+      showLogicMessage(error.message || "เกิดข้อผิดพลาดขณะเรียก AI");
       showToast(error.message || "สร้าง logic ไม่สำเร็จ");
     } finally {
       elements.generateButton.disabled = false;
@@ -740,7 +748,7 @@
   elements.copyButton.addEventListener("click", async () => {
     if (!state.logic) return;
     try {
-      await navigator.clipboard.writeText(extractCode(state.logic));
+      await navigator.clipboard.writeText(state.logic);
       showToast("คัดลอก JavaScript แล้ว");
     } catch {
       showToast("คัดลอกไม่สำเร็จ ตรวจสอบสิทธิ์ Clipboard ของเบราว์เซอร์");
@@ -749,7 +757,7 @@
 
   elements.downloadButton.addEventListener("click", () => {
     if (!state.logic) return;
-    const blob = new Blob([extractCode(state.logic)], { type: "text/javascript;charset=utf-8" });
+    const blob = new Blob([state.logic], { type: "text/javascript;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;

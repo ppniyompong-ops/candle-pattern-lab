@@ -201,7 +201,7 @@ app.post("/api/generate-logic", async (req, res) => {
   });
   const candleSchema = {
     type: "object",
-    properties: { open: { type: "number" }, high: { type: "number" }, low: { type: "number" }, close: { type: "number" } },
+    properties: { open: { type: "number", minimum: 0, maximum: 1 }, high: { type: "number", minimum: 0, maximum: 1 }, low: { type: "number", minimum: 0, maximum: 1 }, close: { type: "number", minimum: 0, maximum: 1 } },
     required: ["open", "high", "low", "close"]
   };
   const variantSchema = {
@@ -209,7 +209,7 @@ app.post("/api/generate-logic", async (req, res) => {
     properties: {
       summary: { type: "string" },
       candles: { type: "array", items: candleSchema, minItems: 5, maxItems: 5 },
-      levels: { type: "object", properties: { entry: { type: "number" }, tp: { type: "number" }, sl: { type: "number" } }, required: ["entry", "tp", "sl"] }
+      levels: { type: "object", properties: { entry: { type: "number", minimum: 0, maximum: 1 }, tp: { type: "number", minimum: 0, maximum: 1 }, sl: { type: "number", minimum: 0, maximum: 1 } }, required: ["entry", "tp", "sl"] }
     },
     required: ["summary", "candles", "levels"]
   };
@@ -259,7 +259,7 @@ app.post("/api/generate-logic", async (req, res) => {
           contents: [{ role: "user", parts: [{ text: userPrompt }] }],
           // Gemini 3.6+ ignores sampling settings; keep only the output limit.
           generationConfig: {
-            maxOutputTokens: 5000,
+            maxOutputTokens: 7000,
             responseFormat: { text: { mimeType: "APPLICATION_JSON", schema: optionsSchema } }
           }
         }),
@@ -267,7 +267,7 @@ app.post("/api/generate-logic", async (req, res) => {
       }
     );
     let data = await response.json().catch(() => ({}));
-    if(response.status===503&&fallbackModel!==model){console.warn("Gemini primary model busy; trying fallback:",model,"->",fallbackModel);await new Promise(resolve=>setTimeout(resolve,500+Math.random()*500));response=await fetch("https://generativelanguage.googleapis.com/v1beta/models/"+encodeURIComponent(fallbackModel)+":generateContent",{method:"POST",headers:{"Content-Type":"application/json","x-goog-api-key":apiKey},body:JSON.stringify({systemInstruction:{parts:[{text:systemPrompt}]},contents:[{role:"user",parts:[{text:userPrompt}]}],generationConfig:{maxOutputTokens:5000,responseFormat:{text:{mimeType:"APPLICATION_JSON",schema:optionsSchema}}}}),signal:AbortSignal.timeout(25_000)});data=await response.json().catch(()=>({}));if(response.ok)model=fallbackModel;} if (!response.ok) {
+    if(response.status===503&&fallbackModel!==model){console.warn("Gemini primary model busy; trying fallback:",model,"->",fallbackModel);await new Promise(resolve=>setTimeout(resolve,500+Math.random()*500));response=await fetch("https://generativelanguage.googleapis.com/v1beta/models/"+encodeURIComponent(fallbackModel)+":generateContent",{method:"POST",headers:{"Content-Type":"application/json","x-goog-api-key":apiKey},body:JSON.stringify({systemInstruction:{parts:[{text:systemPrompt}]},contents:[{role:"user",parts:[{text:userPrompt}]}],generationConfig:{maxOutputTokens:7000,responseFormat:{text:{mimeType:"APPLICATION_JSON",schema:optionsSchema}}}}),signal:AbortSignal.timeout(25_000)});data=await response.json().catch(()=>({}));if(response.ok)model=fallbackModel;} if (!response.ok) {
       const providerMessage = data.error?.message;
       console.error("Gemini API request failed:", response.status, providerMessage || "No provider message");
       return res.status(response.status === 429 ? 429 : response.status === 503 ? 503 : 502).json({

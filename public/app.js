@@ -16,6 +16,7 @@
   const state = {
     bars: sampleBars.map(bar => ({ ...bar })),
     lines: [],
+    pathDraft: null,
     selected: 4,
     selectedLine: null,
     tool: "bull",
@@ -26,7 +27,7 @@
     selectedOptionId: "",
     logic: "",
     viewScale: 1,
-    viewStart: 0,
+    viewStart: 0.5 - MAX_BARS / 2,
     nextLineId: 1
   };
   const elements = {
@@ -55,7 +56,8 @@
     copyButton: document.getElementById("copy-logic"),
     downloadButton: document.getElementById("download-logic"),
     toast: document.getElementById("toast"),
-    toolHint: document.getElementById("tool-hint")
+    toolHint: document.getElementById("tool-hint"),
+    finishPathButton: document.getElementById("finish-path")
   };
 
   let chartSize = { width: 0, height: 0 };
@@ -67,7 +69,44 @@
   }
 
   function cloneLines(lines) {
-    return lines.map(line => ({ ...line }));
+    return lines.map(line => ({
+      ...line,
+      ...(Array.isArray(line.points) ? { points: line.points.map(point => ({ ...point })) } : {})
+    }));
+  }
+
+  function annotationPoints(line) {
+    if (line.kind === "path") return line.points || [];
+    if (line.kind === "rectangle") return [
+      { x: line.x1, price: line.price1 },
+      { x: line.x2, price: line.price2 }
+    ];
+    return [
+      { x: line.x1, price: line.price1 },
+      { x: line.x2, price: line.price2 }
+    ];
+  }
+
+  function annotationPriceValues(line) {
+    if (line.kind === "level") return [line.price];
+    return annotationPoints(line).map(point => point.price);
+  }
+
+  function normalizeLoadedLines(lines) {
+    const seenLevels = new Set();
+    const normalized = lines.slice(-40).reverse().filter(line => {
+      if (line.kind !== "level") return true;
+      if (seenLevels.has(line.levelType)) return false;
+      seenLevels.add(line.levelType);
+      return true;
+    }).reverse();
+    const seenIds = new Set();
+    normalized.forEach(line => {
+      if (!Number.isFinite(Number(line.id)) || seenIds.has(Number(line.id))) line.id = state.nextLineId++;
+      else line.id = Number(line.id);
+      seenIds.add(line.id);
+    });
+    return normalized;
   }
 
   function createSnapshot() {
@@ -79,6 +118,8 @@
     state.lines = cloneLines(snapshot.lines || []);
     state.selected = state.bars.length ? Math.min(Math.max(state.selected, 0), state.bars.length - 1) : -1;
     state.selectedLine = null;
+    state.pathDraft = null;
+    elements.finishPathButton.classList.add("hidden");
   }
 
   function remember() {
@@ -225,6 +266,7 @@
     if (line.kind === "level") {
       return { entry: "#78b9f5", tp: "#72d9ad", sl: "#f17d87" }[line.levelType] || "#78b9f5";
     }
+    if (line.kind === "path" || line.kind === "rectangle") return "#d4b7f0";
     return "#e8c98a";
   }
 
@@ -240,7 +282,7 @@
     ctx.strokeStyle = preview ? color + "aa" : color;
     ctx.fillStyle = color;
     ctx.lineWidth = selected ? 2.3 : 1.5;
-    ctx.setLineDash(line.kind === "level" ? [7, 5] : []);
+    ctx.setLineDash(line.kind === "level" ? [7, 5] : line.kind === "path" ? [2, 4] : []);
     ctx.beginPath();
     if (line.kind === "level") {
       const y = yForPrice(line.price, range, plot);
@@ -263,16 +305,37 @@
         ctx.fillStyle = color;
         ctx.fill();
       }
-    } else {
+    } else if (line.kind === "rectangle") {
       const x1 = lineX(line.x1, plot);
       const y1 = yForPrice(line.price1, range, plot);
       const x2 = lineX(line.x2, plot);
       const y2 = yForPrice(line.price2, range, plot);
-      ctx.moveTo(x1, y1);
-      ctx.lineTo(x2, y2);
-      ctx.stroke();
+      const left = Math.min(x1, x2);
+      const top = Math.min(y1, y2);
+      const width = Math.abs(x2 - x1);
+      const height = Math.abs(y2 - y1);
+      ctx.fillStyle = preview ? "rgba(212,183,240,.06)" : "rgba(212,183,240,.035)";
+      ctx.fillRect(left, top, width, height);
+      ctx.strokeRect(left, top, width, height);
       if (selected) {
-        [ [x1, y1], [x2, y2] ].forEach(([x, y]) => {
+        [[x1, y1], [x2, y2]].forEach(([x, y]) => {
+          ctx.beginPath();
+          ctx.arc(x, y, 3.5, 0, Math.PI * 2);
+          ctx.fillStyle = color;
+          ctx.fill();
+        });
+      }
+    } else {
+      const points = annotationPoints(line);
+      if (points.length) {
+        ctx.moveTo(lineX(points[0].x, plot), yForPrice(points[0].price, range, plot));
+        points.slice(1).forEach(point => ctx.lineTo(lineX(point.x, plot), yForPrice(point.price, range, plot)));
+        ctx.stroke();
+      }
+      if (selected || preview) {
+        points.forEach(point => {
+          const x = lineX(point.x, plot);
+          const y = yForPrice(point.price, range, plot);
           ctx.beginPath();
           ctx.arc(x, y, 3.5, 0, Math.PI * 2);
           ctx.fillStyle = color;
@@ -286,7 +349,7 @@
   function getPreviewBar() {
     // Preview bars are only for a new candle gesture. Selection, handle edits,
     // and chart panning use the same transient state object but have no prices.
-    if (!state.drawing || state.drawing.panning || state.drawing.adjusting || state.drawing.movingLine || state.drawing.adjustingLine ||
+    if (!state.drawing || state.drawing.panning || state.drawing.adjusting || state.drawing.movingLine || state.drawing.adjustingAnnotationPoint ||
         !["bull", "bear"].includes(state.drawing.tool)) return null;
     const start = state.drawing.startPrice;
     let end = state.drawing.endPrice;
@@ -319,7 +382,15 @@
     state.lines.forEach(line => drawAnnotation(line, plot, range));
     if (state.drawing?.kind === "line") drawAnnotation(state.drawing, plot, range, true);
     if (state.drawing?.kind === "level") drawAnnotation({ kind: "level", levelType: state.drawing.levelType, price: state.drawing.price }, plot, range, true);
-    elements.emptyHint.classList.toggle("hidden", state.bars.length > 0 || state.lines.length > 0 || ["line", "level"].includes(state.drawing?.kind));
+    if (state.drawing?.kind === "rectangle") drawAnnotation(state.drawing, plot, range, true);
+    if (state.pathDraft) {
+      const points = state.pathDraft.preview
+        ? [...state.pathDraft.points, state.pathDraft.preview]
+        : state.pathDraft.points;
+      drawAnnotation({ kind: "path", points }, plot, range, true);
+    }
+    elements.emptyHint.classList.toggle("hidden", state.bars.length > 0 || state.lines.length > 0 ||
+      ["line", "level", "rectangle"].includes(state.drawing?.kind) || Boolean(state.pathDraft));
   }
 
   function updateInspector() {
@@ -353,20 +424,35 @@
   }
 
   function normalizePatternLines(lines, bars) {
-    const linePrices = lines.flatMap(line => line.kind === "level" ? [line.price] : [line.price1, line.price2]);
+    const linePrices = lines.flatMap(annotationPriceValues);
     const low = bars.length ? Math.min(...bars.map(bar => bar.low)) : linePrices.length ? Math.min(...linePrices) : priceRange.min;
     const high = bars.length ? Math.max(...bars.map(bar => bar.high)) : linePrices.length ? Math.max(...linePrices) : priceRange.max;
     const span = high - low || 1;
     const normalizeY = price => Number(((price - low) / span).toFixed(6));
-    return lines.map(line => line.kind === "level"
-      ? { type: line.levelType, y: normalizeY(line.price) }
-      : {
-          type: "line",
-          x1: Number((line.x1 / MAX_BARS).toFixed(6)),
-          y1: normalizeY(line.price1),
-          x2: Number((line.x2 / MAX_BARS).toFixed(6)),
-          y2: normalizeY(line.price2)
-        });
+    return lines.map(line => {
+      if (line.kind === "level") return { type: line.levelType, y: normalizeY(line.price) };
+      if (line.kind === "rectangle") return {
+        type: "rectangle",
+        x1: Number((line.x1 / MAX_BARS).toFixed(6)),
+        y1: normalizeY(line.price1),
+        x2: Number((line.x2 / MAX_BARS).toFixed(6)),
+        y2: normalizeY(line.price2)
+      };
+      if (line.kind === "path") return {
+        type: "path",
+        points: line.points.map(point => ({
+          x: Number((point.x / MAX_BARS).toFixed(6)),
+          y: normalizeY(point.price)
+        }))
+      };
+      return {
+        type: "line",
+        x1: Number((line.x1 / MAX_BARS).toFixed(6)),
+        y1: normalizeY(line.price1),
+        x2: Number((line.x2 / MAX_BARS).toFixed(6)),
+        y2: normalizeY(line.price2)
+      };
+    });
   }
 
   function render() {
@@ -377,6 +463,7 @@
   }
 
   function setTool(tool) {
+    if (state.pathDraft && tool !== "path") finishPath();
     state.tool = tool;
     document.querySelectorAll("[data-tool]").forEach(button => {
       const active = button.dataset.tool === tool;
@@ -389,12 +476,36 @@
       select: "ลากกราฟเพื่อเลื่อน · ลากจุดจับเพื่อปรับแท่งหรือปลายเส้น",
       erase: "คลิกแท่งหรือเส้นที่ต้องการลบ",
       line: "ลากเพื่อวาดเส้นอิสระ",
+      path: "คลิกเพิ่มจุดหัก · คลิกจุดล่าสุดหรือดับเบิลคลิกเพื่อจบ",
+      rect: "ลากเพื่อวาดกล่องสี่เหลี่ยม",
       entry: "คลิกหรือลากเพื่อวางระดับ Entry",
       tp: "คลิกหรือลากเพื่อวางระดับ Take Profit",
       sl: "คลิกหรือลากเพื่อวางระดับ Stop Loss"
     };
     elements.toolHint.textContent = hints[tool];
     canvas.style.cursor = tool === "erase" ? "not-allowed" : tool === "select" ? "grab" : "crosshair";
+  }
+
+  function finishPath() {
+    if (!state.pathDraft) return;
+    const draft = state.pathDraft;
+    state.pathDraft = null;
+    elements.finishPathButton.classList.add("hidden");
+    if (draft.points.length < 2) {
+      renderChart();
+      showToast("เพิ่มจุดอย่างน้อย 2 จุดก่อนจบเส้น");
+      return;
+    }
+    if (state.lines.length >= 40) {
+      renderChart();
+      showToast("วาดเส้นได้สูงสุด 40 เส้น");
+      return;
+    }
+    remember();
+    const id = state.nextLineId++;
+    state.lines.push({ id, kind: "path", points: draft.points.map(point => ({ ...point })) });
+    state.selectedLine = id;
+    render();
   }
 
   function pointForEvent(event) {
@@ -431,15 +542,62 @@
       const line = state.lines[index];
       if (line.kind === "level") {
         if (Math.abs(point.y - yForPrice(line.price, priceRange, point.plot)) < 8) return line;
-      } else {
+      } else if (line.kind === "rectangle") {
         const x1 = lineX(line.x1, point.plot);
         const y1 = yForPrice(line.price1, priceRange, point.plot);
         const x2 = lineX(line.x2, point.plot);
         const y2 = yForPrice(line.price2, priceRange, point.plot);
-        if (distanceToSegment(point.x, point.y, x1, y1, x2, y2) < 8) return line;
+        const left = Math.min(x1, x2);
+        const right = Math.max(x1, x2);
+        const top = Math.min(y1, y2);
+        const bottom = Math.max(y1, y2);
+        if (point.x >= left && point.x <= right && point.y >= top && point.y <= bottom) return line;
+        const edgeDistance = Math.min(
+          distanceToSegment(point.x, point.y, left, top, right, top),
+          distanceToSegment(point.x, point.y, right, top, right, bottom),
+          distanceToSegment(point.x, point.y, right, bottom, left, bottom),
+          distanceToSegment(point.x, point.y, left, bottom, left, top)
+        );
+        if (edgeDistance < 8) return line;
+      } else {
+        const points = annotationPoints(line);
+        for (let i = 1; i < points.length; i += 1) {
+          const a = points[i - 1];
+          const b = points[i];
+          if (distanceToSegment(point.x, point.y, lineX(a.x, point.plot), yForPrice(a.price, priceRange, point.plot), lineX(b.x, point.plot), yForPrice(b.price, priceRange, point.plot)) < 8) return line;
+        }
       }
     }
     return null;
+  }
+
+  function annotationPointAt(line, point, plot) {
+    if (line.kind === "level") return -1;
+    const points = annotationPoints(line);
+    let nearestIndex = -1;
+    let nearestDistance = 10;
+    points.forEach((item, index) => {
+      const distance = Math.hypot(point.x - lineX(item.x, plot), point.y - yForPrice(item.price, priceRange, plot));
+      if (distance < nearestDistance) {
+        nearestDistance = distance;
+        nearestIndex = index;
+      }
+    });
+    return nearestIndex;
+  }
+
+  function updateAnnotationPoint(line, index, x, price) {
+    if (line.kind === "path") {
+      line.points[index] = { x, price };
+    } else if (line.kind === "rectangle") {
+      const prefix = index === 0 ? "1" : "2";
+      line["x" + prefix] = x;
+      line["price" + prefix] = price;
+    } else {
+      const prefix = index === 0 ? "1" : "2";
+      line["x" + prefix] = x;
+      line["price" + prefix] = price;
+    }
   }
 
   function visibleSlots(plot) {
@@ -447,8 +605,10 @@
   }
 
   function clampViewStart(plot) {
+    const firstCandleCenteredStart = 0.5 - visibleSlots(plot) / 2;
+    const minViewStart = Math.min(0, firstCandleCenteredStart);
     const lastVisibleStart = Math.max(0, state.bars.length + 1 - visibleSlots(plot));
-    state.viewStart = Math.max(0, Math.min(lastVisibleStart, state.viewStart));
+    state.viewStart = Math.max(minViewStart, Math.min(lastVisibleStart, state.viewStart));
   }
 
   function setZoom(nextScale, anchorX) {
@@ -476,7 +636,8 @@
     state.viewScale = state.bars.length
       ? Math.min(4, MAX_BARS / Math.max(3, state.bars.length + 2))
       : 1;
-    state.viewStart = 0;
+    const visible = visibleSlots(chartPlot());
+    state.viewStart = state.bars.length ? (state.bars.length - visible) / 2 : 0.5 - visible / 2;
     renderChart();
     updateZoomControls();
   }
@@ -497,14 +658,9 @@
       const line = annotationAt(point);
       if (line) {
         state.selectedLine = line.id;
-        let endpoint = "";
-        if (line.kind === "line") {
-          const startDistance = Math.hypot(point.x - lineX(line.x1, point.plot), point.y - yForPrice(line.price1, priceRange, point.plot));
-          const endDistance = Math.hypot(point.x - lineX(line.x2, point.plot), point.y - yForPrice(line.price2, priceRange, point.plot));
-          if (Math.min(startDistance, endDistance) < 10) endpoint = startDistance <= endDistance ? "start" : "end";
-        }
-        state.drawing = endpoint ? {
-          adjustingLine: { id: line.id, endpoint },
+        const pointIndex = annotationPointAt(line, point, point.plot);
+        state.drawing = pointIndex >= 0 ? {
+          adjustingAnnotationPoint: { id: line.id, index: pointIndex },
           moved: false,
           startX: point.x,
           startY: point.y
@@ -514,7 +670,7 @@
           startX: point.x,
           startY: point.y,
           startRange: { ...priceRange },
-          originalLine: { ...line }
+          originalLine: cloneLines([line])[0]
         };
         canvas.setPointerCapture(event.pointerId);
         renderChart();
@@ -553,6 +709,36 @@
       }
       return;
     }
+    if (state.tool === "path") {
+      const position = linePositionForX(point.x, point.plot);
+      const price = priceForY(point.y);
+      if (!state.pathDraft) {
+        if (state.lines.length >= 40) {
+          showToast("วาดเส้นได้สูงสุด 40 เส้น");
+          return;
+        }
+        state.pathDraft = { points: [{ x: position, price }], preview: { x: position, price } };
+        elements.finishPathButton.classList.remove("hidden");
+        renderChart();
+        return;
+      }
+      const draft = state.pathDraft;
+      const last = draft.points[draft.points.length - 1];
+      const lastDistance = Math.hypot(point.x - lineX(last.x, point.plot), point.y - yForPrice(last.price, priceRange, point.plot));
+      if (event.detail >= 2 || (draft.points.length >= 2 && lastDistance < 10)) {
+        if (event.detail >= 2 && lastDistance >= 10 && draft.points.length < 40) draft.points.push({ x: position, price });
+        finishPath();
+        return;
+      }
+      if (draft.points.length >= 40) {
+        showToast("เส้นหักมีจุดได้สูงสุด 40 จุด");
+        return;
+      }
+      draft.points.push({ x: position, price });
+      draft.preview = { x: position, price };
+      renderChart();
+      return;
+    }
     if (state.tool === "erase") {
       const line = annotationAt(point);
       if (line) {
@@ -570,18 +756,29 @@
       }
       return;
     }
-    if (["line", "entry", "tp", "sl"].includes(state.tool)) {
-      if (state.lines.length >= 40) {
+    if (["line", "rect", "entry", "tp", "sl"].includes(state.tool)) {
+      const existingLevel = ["entry", "tp", "sl"].includes(state.tool)
+        ? state.lines.find(line => line.kind === "level" && line.levelType === state.tool)
+        : null;
+      if (state.lines.length >= 40 && !existingLevel) {
         showToast("วาดเส้นได้สูงสุด 40 เส้น");
         return;
       }
       state.selectedLine = null;
-      if (state.tool === "line") {
+      if (state.tool === "line" || state.tool === "rect") {
         const position = linePositionForX(point.x, point.plot);
         const price = priceForY(point.y);
-        state.drawing = { kind: "line", x1: position, x2: position, price1: price, price2: price, range: { ...priceRange } };
+        state.drawing = {
+          kind: state.tool === "rect" ? "rectangle" : "line",
+          x1: position, x2: position, price1: price, price2: price,
+          range: { ...priceRange }
+        };
       } else {
-        state.drawing = { kind: "level", levelType: state.tool, price: priceForY(point.y), range: { ...priceRange } };
+        state.drawing = {
+          kind: "level", levelType: state.tool,
+          replaceId: existingLevel?.id,
+          price: priceForY(point.y), range: { ...priceRange }
+        };
       }
       canvas.setPointerCapture(event.pointerId);
       renderChart();
@@ -605,8 +802,16 @@
   });
 
   canvas.addEventListener("pointermove", event => {
-    if (!state.drawing) return;
     const point = pointForEvent(event);
+    if (state.pathDraft && !state.drawing) {
+      state.pathDraft.preview = {
+        x: linePositionForX(point.x, point.plot),
+        price: priceForY(Math.max(point.plot.top, Math.min(point.plot.bottom, point.y)))
+      };
+      renderChart();
+      return;
+    }
+    if (!state.drawing) return;
     if (state.drawing.panning) {
       const delta = point.x - state.drawing.startX;
       if (Math.abs(delta) > 3) state.drawing.moved = true;
@@ -618,23 +823,17 @@
       }
       return;
     }
-    if (state.drawing.adjustingLine) {
+    if (state.drawing.adjustingAnnotationPoint) {
       const drawing = state.drawing;
-      const line = state.lines.find(item => item.id === drawing.adjustingLine.id);
+      const line = state.lines.find(item => item.id === drawing.adjustingAnnotationPoint.id);
       if (!line) return;
       if (Math.hypot(point.x - drawing.startX, point.y - drawing.startY) > 2) {
         if (!drawing.moved) {
           remember();
           drawing.moved = true;
         }
-        const endpoint = drawing.adjustingLine.endpoint;
-        if (endpoint === "start") {
-          line.x1 = linePositionForX(point.x, point.plot);
-          line.price1 = priceForY(point.y);
-        } else {
-          line.x2 = linePositionForX(point.x, point.plot);
-          line.price2 = priceForY(point.y);
-        }
+        updateAnnotationPoint(line, drawing.adjustingAnnotationPoint.index,
+          linePositionForX(point.x, point.plot), priceForY(point.y));
         renderChart();
       }
       return;
@@ -656,17 +855,19 @@
           line.price = Math.max(drawing.startRange.min, Math.min(drawing.startRange.max, drawing.originalLine.price + requestedPriceDelta));
         } else {
           const slot = (point.plot.right - point.plot.left) / MAX_BARS * state.viewScale;
+          const originals = annotationPoints(drawing.originalLine);
+          const originalXs = originals.map(item => item.x);
+          const originalPrices = originals.map(item => item.price);
           let indexDelta = dx / slot;
-          const minX = Math.min(drawing.originalLine.x1, drawing.originalLine.x2);
-          const maxX = Math.max(drawing.originalLine.x1, drawing.originalLine.x2);
+          const minX = Math.min(...originalXs);
+          const maxX = Math.max(...originalXs);
           indexDelta = Math.max(-minX, Math.min(MAX_BARS - maxX, indexDelta));
-          const minPrice = Math.min(drawing.originalLine.price1, drawing.originalLine.price2);
-          const maxPrice = Math.max(drawing.originalLine.price1, drawing.originalLine.price2);
+          const minPrice = Math.min(...originalPrices);
+          const maxPrice = Math.max(...originalPrices);
           const priceDelta = Math.max(drawing.startRange.min - minPrice, Math.min(drawing.startRange.max - maxPrice, requestedPriceDelta));
-          line.x1 = drawing.originalLine.x1 + indexDelta;
-          line.x2 = drawing.originalLine.x2 + indexDelta;
-          line.price1 = drawing.originalLine.price1 + priceDelta;
-          line.price2 = drawing.originalLine.price2 + priceDelta;
+          originals.forEach((original, index) => updateAnnotationPoint(
+            line, index, original.x + indexDelta, original.price + priceDelta
+          ));
         }
         renderChart();
       }
@@ -674,7 +875,7 @@
     }
     const y = Math.max(point.plot.top, Math.min(point.plot.bottom, point.y));
     const fraction = Math.max(0, Math.min(1, (y - point.plot.top) / (point.plot.bottom - point.plot.top)));
-    if (state.drawing.kind === "line") {
+    if (state.drawing.kind === "line" || state.drawing.kind === "rectangle") {
       state.drawing.x2 = linePositionForX(point.x, point.plot);
       state.drawing.price2 = state.drawing.range.max - fraction * (state.drawing.range.max - state.drawing.range.min);
       renderChart();
@@ -718,7 +919,7 @@
       render();
       return;
     }
-    if (state.drawing.adjustingLine) {
+    if (state.drawing.adjustingAnnotationPoint) {
       state.drawing = null;
       render();
       return;
@@ -728,7 +929,7 @@
       render();
       return;
     }
-    if (state.drawing.kind === "line" || state.drawing.kind === "level") {
+    if (["line", "rectangle", "level"].includes(state.drawing.kind)) {
       const draft = state.drawing;
       const plot = chartPlot();
       const slot = (plot.right - plot.left) / MAX_BARS * state.viewScale;
@@ -740,11 +941,23 @@
         showToast("ลากเส้นจากจุดเริ่มไปยังจุดปลาย");
         return;
       }
+      if (draft.kind === "rectangle" &&
+          (Math.abs(draft.x2 - draft.x1) * slot < 3 || Math.abs(draft.price2 - draft.price1) * verticalPixelsPerPrice < 3)) {
+        state.drawing = null;
+        render();
+        showToast("ลากให้ได้ทั้งความกว้างและความสูงของกรอบ");
+        return;
+      }
       remember();
-      const id = state.nextLineId++;
-      state.lines.push(draft.kind === "level"
+      const id = draft.kind === "level" && draft.replaceId ? draft.replaceId : state.nextLineId++;
+      const annotation = draft.kind === "level"
         ? { id, kind: "level", levelType: draft.levelType, price: draft.price }
-        : { id, kind: "line", x1: draft.x1, x2: draft.x2, price1: draft.price1, price2: draft.price2 });
+        : { id, kind: draft.kind, x1: draft.x1, x2: draft.x2, price1: draft.price1, price2: draft.price2 };
+      if (draft.kind === "level" && draft.replaceId) {
+        state.lines = state.lines.map(line => line.id === draft.replaceId ? annotation : line);
+      } else {
+        state.lines.push(annotation);
+      }
       state.selectedLine = id;
       state.drawing = null;
       render();
@@ -761,6 +974,12 @@
   }
   canvas.addEventListener("pointerup", finishDrawing);
   canvas.addEventListener("pointercancel", finishDrawing);
+  canvas.addEventListener("dblclick", event => {
+    if (state.tool === "path" && state.pathDraft) {
+      event.preventDefault();
+      finishPath();
+    }
+  });
 
   canvas.addEventListener("wheel", event => {
     event.preventDefault();
@@ -790,6 +1009,14 @@
       state.lines = state.lines.filter(line => line.id !== state.selectedLine);
       state.selectedLine = null;
       render();
+    } else if (event.key === "Enter" && state.tool === "path" && state.pathDraft) {
+      event.preventDefault();
+      finishPath();
+    } else if (event.key === "Escape" && state.pathDraft) {
+      event.preventDefault();
+      state.pathDraft = null;
+      elements.finishPathButton.classList.add("hidden");
+      renderChart();
     } else if ((event.key === "Delete" || event.key === "Backspace") && state.selected >= 0) {
       event.preventDefault();
       remember();
@@ -802,6 +1029,7 @@
   document.querySelectorAll("[data-tool]").forEach(button => {
     button.addEventListener("click", () => setTool(button.dataset.tool));
   });
+  elements.finishPathButton.addEventListener("click", finishPath);
 
   document.getElementById("zoom-in").addEventListener("click", () => {
     const plot = chartPlot();
@@ -928,7 +1156,7 @@
     }
     remember();
     state.bars = cloneBars(item.candles).slice(0, MAX_BARS);
-    state.lines = cloneLines(Array.isArray(item.lines) ? item.lines : []).slice(0, 40);
+    state.lines = normalizeLoadedLines(cloneLines(Array.isArray(item.lines) ? item.lines : []));
     state.nextLineId = Math.max(state.nextLineId, ...state.lines.map(line => Number(line.id) + 1).filter(Number.isFinite), 1);
     state.selectedLine = null;
     state.selected = state.bars.length ? state.bars.length - 1 : -1;

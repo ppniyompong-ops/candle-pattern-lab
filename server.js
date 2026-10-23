@@ -58,14 +58,16 @@ function validateCandles(value) {
 function validateLines(value) {
   if (!Array.isArray(value) || value.length > 40) return null;
   const lines = [];
+  const levelTypes = new Set();
   for (const line of value) {
     if (["entry", "tp", "sl"].includes(line?.type)) {
       const y = Number(line.y);
-      if (!Number.isFinite(y) || y < -10 || y > 10) return null;
+      if (levelTypes.has(line.type) || !Number.isFinite(y) || y < -10 || y > 10) return null;
+      levelTypes.add(line.type);
       lines.push({ type: line.type, y: Number(y.toFixed(6)) });
       continue;
     }
-    if (line?.type === "line") {
+    if (["line", "rectangle"].includes(line?.type)) {
       const x1 = Number(line.x1);
       const y1 = Number(line.y1);
       const x2 = Number(line.x2);
@@ -73,12 +75,24 @@ function validateLines(value) {
       if (![x1, y1, x2, y2].every(Number.isFinite) ||
           x1 < 0 || x1 > 1 || x2 < 0 || x2 > 1 || y1 < -10 || y1 > 10 || y2 < -10 || y2 > 10) return null;
       lines.push({
-        type: "line",
+        type: line.type,
         x1: Number(x1.toFixed(6)),
         y1: Number(y1.toFixed(6)),
         x2: Number(x2.toFixed(6)),
         y2: Number(y2.toFixed(6))
       });
+      continue;
+    }
+    if (line?.type === "path") {
+      if (!Array.isArray(line.points) || line.points.length < 2 || line.points.length > 40) return null;
+      const points = [];
+      for (const point of line.points) {
+        const x = Number(point?.x);
+        const y = Number(point?.y);
+        if (!Number.isFinite(x) || !Number.isFinite(y) || x < 0 || x > 1 || y < -10 || y > 10) return null;
+        points.push({ x: Number(x.toFixed(6)), y: Number(y.toFixed(6)) });
+      }
+      lines.push({ type: "path", points });
       continue;
     }
     return null;
@@ -125,9 +139,9 @@ app.post("/api/generate-logic", async (req, res) => {
     "Alternative drawingMatch should follow the hand-drawn candle order, directions, body sizes, and wick proportions closely with tighter relative tolerance.",
     "Alternative descriptionMatch should prioritize the user's written description and use the drawing as supporting guidance.",
     "Alternative flexibleMatch should preserve the core order and relationships while allowing wider relative variation in candle body and wick proportions.",
-    "Line annotations contain generic line segments or named horizontal levels: entry, tp (take profit), and sl (stop loss). When candles exist, y values use the same low-to-high normalization as the template candles and may fall outside 0 to 1; generic line x coordinates run left to right across 12 canvas slots, where candle centers are at (index + 0.5) / 12.",
-    "Use line annotations as geometric constraints when relevant: consider touches, crosses, ordering, and whether entry/tp/sl sit above or below the candle pattern. Do not imply a trade signal or assume a profitable outcome.",
-    "For a candidate candle sequence, map a normalized annotation y to its own range as sequenceLow + y * (sequenceHigh - sequenceLow). For a generic segment, interpolate its y at the candidate candles' normalized canvas x positions when evaluating touches or crosses.",
+    "Chart annotations can contain generic line segments, multi-point paths, rectangular zones, and named horizontal levels: at most one each of entry, tp (take profit), and sl (stop loss). When candles exist, y values use the same low-to-high normalization as the template candles and may fall outside 0 to 1; annotation x coordinates run left to right across 12 canvas slots, where candle centers are at (index + 0.5) / 12.",
+    "Use annotations as geometric constraints when relevant: consider touches, crosses, path direction and turning points, whether candles enter or remain inside a rectangle, and whether entry/tp/sl sit above or below the candle pattern. Do not imply a trade signal or assume a profitable outcome.",
+    "For a candidate candle sequence, map a normalized annotation y to its own range as sequenceLow + y * (sequenceHigh - sequenceLow). For a line or path segment, interpolate y at candidate candle x positions when evaluating touches or crosses. Treat rectangle edges as zone boundaries.",
     "If the template candle array is empty, use the line annotations and description to infer only the sequence or level relationships they require. If both are empty, rely on the description alone and use a strict textual interpretation for drawingMatch.",
     "Each code string must declare function detectPattern(candles), accept real unnormalized OHLC candles in oldest-to-newest order, inspect only the most recent sequence needed by the template or description, validate input, normalize that sequence by its own high-low range, and return a boolean.",
     "When template candles are provided they are normalized from 0 to 1 across the whole pattern. Never compare their absolute values as market prices. Compare relative candle geometry and sequence relationships.",

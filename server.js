@@ -175,10 +175,10 @@ app.post("/api/generate-logic", async (req, res) => {
   const configuredModel = process.env.GEMINI_MODEL?.trim();
   const configuredFallbackModel = process.env.GEMINI_FALLBACK_MODEL?.trim();
   const modelCandidates = [...new Set([
-    configuredModel || "gemini-3.5-flash-lite",
+    configuredModel || "gemini-3.8-flash",
     configuredFallbackModel || "gemini-3.6-flash",
-    "gemini-3.8-flash",
-    "gemini-3.5-flash-lite"
+    "gemini-3.5-flash-lite",
+    "gemini-3.8-flash"
   ].filter(Boolean))];
   let model = modelCandidates[0];
   const systemPrompt = [
@@ -256,11 +256,12 @@ app.post("/api/generate-logic", async (req, res) => {
 
   try {
     const retryableStatuses = new Set([404, 429, 500, 502, 503, 504]);
-    let response = null;
-    let data = {};
-    let lastError = null;
+    let lastFailure = null;
+    let result = null;
     for (let attempt = 0; attempt < modelCandidates.length; attempt += 1) {
       model = modelCandidates[attempt];
+      let response;
+      let data = {};
       try {
         response = await fetch(
           "https://generativelanguage.googleapis.com/v1beta/models/" + encodeURIComponent(model) + ":generateContent",
@@ -274,76 +275,105 @@ app.post("/api/generate-logic", async (req, res) => {
               systemInstruction: { parts: [{ text: systemPrompt }] },
               contents: [{ role: "user", parts: [{ text: userPrompt }] }],
               generationConfig: {
-                maxOutputTokens: 7000,
+                maxOutputTokens: 14000,
                 thinkingConfig: { thinkingLevel: "low" },
                 responseFormat: { text: { mimeType: "APPLICATION_JSON", schema: optionsSchema } }
               }
             }),
-            signal: AbortSignal.timeout(20_000)
+            signal: AbortSignal.timeout(30_000)
           }
         );
         data = await response.json().catch(() => ({}));
       } catch (error) {
-        lastError = error;
-        response = null;
-        if (attempt === modelCandidates.length - 1) break;
+        lastFailure = { kind: "network", message: error.message };
         console.warn("Gemini request failed; trying next model:", model, error.message);
+        if (attempt < modelCandidates.length - 1) {
+          await new Promise(resolve => setTimeout(resolve, 350 + Math.random() * 450));
+        }
         continue;
       }
-      if (response.ok) break;
-      if (!retryableStatuses.has(response.status) || attempt === modelCandidates.length - 1) break;
-      console.warn("Gemini model unavailable; trying next model:", model, response.status);
-      await new Promise(resolve => setTimeout(resolve, 350 + Math.random() * 450));
-    }
-    if (!response?.ok) {
-      const status = response?.status;
-      const providerMessage = data.error?.message;
-      console.error("Gemini API request failed:", status || "network error", providerMessage || lastError?.message || "No provider message");
-      if (status === 429) {
-        return res.status(429).json({ error: "โควตา Gemini เต็มชั่วคราว ลองโมเดลสำรองแล้ว กรุณารอสักครู่แล้วลองใหม่" });
+      if (!response.ok) {
+        lastFailure = { kind: "http", status: response.status, message: data.error?.message || "" };
+        if (!retryableStatuses.has(response.status) || attempt === modelCandidates.length - 1) break;
+        console.warn("Gemini model unavailable; trying next model:", model, response.status);
+        await new Promise(resolve => setTimeout(resolve, 350 + Math.random() * 450));
+        continue;
       }
-      if (status === 503 || !status) {
-        return res.status(503).json({ error: "Gemini ยังไม่พร้อมหลังลองหลายโมเดล กรุณาลองใหม่อีกครั้งในอีกสักครู่" });
+
+      const candidate = data.candidates?.[0];
+      const outputText = (candidate?.content?.parts || [])
+        .filter(part => part.thought !== true)
+        .map(part => part.text || "")
+        .join("\n")
+        .trim();
+      if (!outputText) {
+        lastFailure = {
+          kind: candidate?.finishReason === "MAX_TOKENS" ? "truncated" : "empty",
+          reason: candidate?.finishReason || data.promptFeedback?.blockReason || "ไม่ทราบสาเหตุ"
+        };
+      } else {
+        let parsed = null;
+        try {
+          parsed = JSON.parse(outputText);
+        } catch {
+          lastFailure = { kind: candidate?.finishReason === "MAX_TOKENS" ? "truncated" : "json" };
+        }
+        if (parsed && typeof parsed === "object") {
+          const interpretation = validateAiInterpretation(parsed.interpretation);
+          const options = [
+            { id: "drawing", title: candles.length ? "ใกล้เคียงรูปวาดที่สุด" : "ตีความคำอธิบายแบบเคร่งครัด", value: parsed.drawingMatch },
+            { id: "description", title: "ยึดตามคำอธิบาย", value: parsed.descriptionMatch },
+            { id: "flexible", title: "ยืดหยุ่นกับสัดส่วน", value: parsed.flexibleMatch }
+          ].map(option => ({
+            id: option.id,
+            title: option.title,
+            summary: typeof option.value?.summary === "string" ? option.value.summary.slice(0, 500) : "",
+            code: typeof option.value?.code === "string" ? option.value.code.slice(0, 12000) : ""
+          }));
+          if (interpretation && options.every(option => option.summary && /function\s+detectPattern\s*\(/.test(option.code))) {
+            result = { options, interpretation, model };
+            break;
+          }
+          lastFailure = { kind: "validation" };
+        } else {
+          lastFailure = { kind: "json" };
+        }
       }
-      return res.status(502).json({
-        error: "Gemini ตอบกลับ " + status + ": " + (providerMessage || "ตรวจสอบ API key, Billing และชื่อโมเดลใน Render")
-      });
+      if (attempt < modelCandidates.length - 1) {
+        console.warn("Gemini returned an incomplete result; trying next model:", model, lastFailure?.kind);
+        await new Promise(resolve => setTimeout(resolve, 350 + Math.random() * 450));
+      }
     }
-    const candidate = data.candidates?.[0];
-    const outputText = (candidate?.content?.parts || [])
-      .filter(part => part.thought !== true)
-      .map(part => part.text || "")
-      .join("\n")
-      .trim();
-    if (!outputText) {
-      const reason = candidate?.finishReason || data.promptFeedback?.blockReason || "ไม่ทราบสาเหตุ";
-      console.error("Gemini returned no text:", reason);
-      return res.status(502).json({ error: "Gemini ไม่ส่งข้อความกลับมา (" + reason + ") ลองใหม่อีกครั้ง" });
+
+    if (!result) {
+      if (lastFailure?.kind === "http") {
+        console.error("Gemini API request failed:", lastFailure.status, lastFailure.message || "No provider message");
+        if (lastFailure.status === 429) {
+          return res.status(429).json({ error: "โควตา Gemini เต็มชั่วคราว ลองโมเดลสำรองแล้ว กรุณารอสักครู่แล้วลองใหม่" });
+        }
+        if (lastFailure.status === 503 || lastFailure.status === 504) {
+          return res.status(503).json({ error: "Gemini ยังไม่พร้อมหลังลองหลายโมเดล กรุณาลองใหม่อีกครั้งในอีกสักครู่" });
+        }
+        return res.status(502).json({
+          error: "Gemini ตอบกลับ " + lastFailure.status + ": " + (lastFailure.message || "ตรวจสอบ API key, Billing และชื่อโมเดลใน Render")
+        });
+      }
+      if (lastFailure?.kind === "network") {
+        console.error("Gemini request failed:", lastFailure.message || "network error");
+        return res.status(503).json({ error: "เชื่อมต่อ Gemini ไม่สำเร็จหลังลองหลายโมเดล กรุณาลองใหม่อีกครั้ง" });
+      }
+      if (lastFailure?.kind === "truncated") {
+        return res.status(502).json({ error: "Gemini ตัดคำตอบก่อนสร้างครบ ลองใหม่อีกครั้ง" });
+      }
+      if (lastFailure?.kind === "validation") {
+        return res.status(502).json({ error: "AI สร้างข้อมูลรูปแบบหรือ logic ไม่ครบ ลองใหม่อีกครั้ง" });
+      }
+      if (lastFailure?.kind === "json") {
+        return res.status(502).json({ error: "รูปแบบคำตอบ AI อ่านไม่ได้หลังลองหลายโมเดล ลองสร้างใหม่อีกครั้ง" });
+      }
+      return res.status(502).json({ error: "Gemini ไม่ส่งคำตอบกลับมาหลังลองหลายโมเดล กรุณาลองใหม่อีกครั้ง" });
     }
-    let parsed;
-    try {
-      parsed = JSON.parse(outputText);
-    } catch {
-      return res.status(502).json({ error: "รูปแบบคำตอบ AI อ่านไม่ได้ ลองสร้างตัวเลือกใหม่อีกครั้ง" });
-    }
-    const interpretation = validateAiInterpretation(parsed.interpretation);
-    if (!interpretation) {
-      return res.status(502).json({ error: "AI สร้างรูปแบบ HLOC 5 แท่งพร้อม Entry/TP/SL ไม่ครบ ลองสร้างใหม่อีกครั้ง" });
-    }
-    const options = [
-      { id: "drawing", title: candles.length ? "ใกล้เคียงรูปวาดที่สุด" : "ตีความคำอธิบายแบบเคร่งครัด", value: parsed.drawingMatch },
-      { id: "description", title: "ยึดตามคำอธิบาย", value: parsed.descriptionMatch },
-      { id: "flexible", title: "ยืดหยุ่นกับสัดส่วน", value: parsed.flexibleMatch }
-    ].map(option => ({
-      id: option.id,
-      title: option.title,
-      summary: typeof option.value?.summary === "string" ? option.value.summary.slice(0, 500) : "",
-      code: typeof option.value?.code === "string" ? option.value.code.slice(0, 12000) : ""
-    }));
-    if (options.some(option => !option.summary || !/function\s+detectPattern\s*\(/.test(option.code))) {
-      return res.status(502).json({ error: "AI สร้างตัวเลือกไม่ครบ ลองสร้างใหม่อีกครั้ง" });
-    }
-    res.json({ options, interpretation, model });
+    res.json(result);
   } catch (error) {
     console.error("Logic generation failed:", error.message);
     res.status(502).json({ error: "เชื่อมต่อ Gemini ไม่สำเร็จ ลองใหม่อีกครั้ง" });

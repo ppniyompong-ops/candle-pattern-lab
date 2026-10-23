@@ -246,8 +246,8 @@
       ctx.strokeRect(centerX - bodyWidth / 2 - 3, bodyTop - 3, bodyWidth + 6, bodyHeight + 6);
       if (state.tool === "select") {
         const handles = [
-          ["high", centerX, highY], ["open", centerX, openY],
-          ["close", centerX, closeY], ["low", centerX, lowY]
+          ["high", centerX, highY], ["open", centerX - bodyWidth / 2 - 3, openY],
+          ["close", centerX + bodyWidth / 2 + 3, closeY], ["low", centerX, lowY]
         ];
         handles.forEach(([key, x, y]) => {
           ctx.beginPath();
@@ -568,24 +568,40 @@
     const slot = (plot.right - plot.left) / MAX_BARS * state.viewScale;
     const centerX = plot.left + (index + 0.5 - state.viewStart) * slot;
     const bodyWidth = Math.min(26, Math.max(7, slot * 0.38));
-    if (Math.abs(point.x - centerX) > Math.max(11, bodyWidth / 2 + 5)) return null;
-    const highY = yForPrice(bar.high, priceRange, plot);
-    const lowY = yForPrice(bar.low, priceRange, plot);
     const openY = yForPrice(bar.open, priceRange, plot);
     const closeY = yForPrice(bar.close, priceRange, plot);
+    const highY = yForPrice(bar.high, priceRange, plot);
+    const lowY = yForPrice(bar.low, priceRange, plot);
     const bodyTop = Math.min(openY, closeY);
     const bodyBottom = Math.max(openY, closeY);
-    const hitRadius = 10;
-    if (point.y <= bodyTop + hitRadius &&
-        distanceToSegment(point.x, point.y, centerX, highY, centerX, bodyTop) <= hitRadius) return "high";
-    if (point.y >= bodyBottom - hitRadius &&
-        distanceToSegment(point.x, point.y, centerX, bodyBottom, centerX, lowY) <= hitRadius) return "low";
-    if (point.y >= bodyTop - hitRadius && point.y <= bodyBottom + hitRadius) {
-      return Math.abs(point.y - openY) <= Math.abs(point.y - closeY) ? "open" : "close";
-    }
-    if (Math.abs(point.y - highY) <= hitRadius) return "high";
-    if (Math.abs(point.y - lowY) <= hitRadius) return "low";
-    return null;
+    const wickHitRadius = 8;
+    const handleHitRadius = 10;
+    if (point.x < centerX - bodyWidth / 2 - handleHitRadius ||
+        point.x > centerX + bodyWidth / 2 + handleHitRadius) return null;
+
+    // Hit-test visible wick segments first so the wider candle body cannot
+    // steal a drag intended for the high or low handle.
+    if (point.y <= bodyTop &&
+        distanceToSegment(point.x, point.y, centerX, highY, centerX, bodyTop) <= wickHitRadius) return "high";
+    if (point.y >= bodyBottom &&
+        distanceToSegment(point.x, point.y, centerX, bodyBottom, centerX, lowY) <= wickHitRadius) return "low";
+
+    const handles = [
+      ["high", centerX, highY],
+      ["low", centerX, lowY],
+      ["open", centerX - bodyWidth / 2 - 3, openY],
+      ["close", centerX + bodyWidth / 2 + 3, closeY]
+    ];
+    let nearest = null;
+    let nearestDistance = handleHitRadius;
+    handles.forEach(([part, x, y]) => {
+      const distance = Math.hypot(point.x - x, point.y - y);
+      if (distance <= nearestDistance) {
+        nearest = part;
+        nearestDistance = distance;
+      }
+    });
+    return nearest;
   }
 
   function linePositionForX(x, plot) {
@@ -761,7 +777,13 @@
         if (hit) state.selected = hit.index;
         if (part) {
           remember();
-          state.drawing = { adjusting: part, index: targetIndex, range: { ...priceRange } };
+          state.drawing = {
+            adjusting: part,
+            index: targetIndex,
+            range: { ...priceRange },
+            startY: point.y,
+            startBar: { ...state.bars[targetIndex] }
+          };
           canvas.setPointerCapture(event.pointerId);
           renderChart();
           return;
@@ -963,14 +985,25 @@
       return;
     }
     if (state.drawing.adjusting) {
-      const bar = state.bars[state.drawing.index];
-      const range = state.drawing.range;
-      const price = range.max - fraction * (range.max - range.min);
-      const key = state.drawing.adjusting;
-      if (key === "high") bar.high = Math.max(price, bar.open, bar.close);
-      if (key === "low") bar.low = Math.min(price, bar.open, bar.close);
-      if (key === "open") { bar.open = price; bar.high = Math.max(bar.high, price); bar.low = Math.min(bar.low, price); }
-      if (key === "close") { bar.close = price; bar.high = Math.max(bar.high, price); bar.low = Math.min(bar.low, price); }
+      const drawing = state.drawing;
+      const bar = state.bars[drawing.index];
+      const original = drawing.startBar;
+      const range = drawing.range;
+      const deltaPrice = (drawing.startY - point.y) / (point.plot.bottom - point.plot.top) *
+        (range.max - range.min);
+      const key = drawing.adjusting;
+      if (key === "high") bar.high = Math.max(original.high + deltaPrice, original.open, original.close);
+      if (key === "low") bar.low = Math.min(original.low + deltaPrice, original.open, original.close);
+      if (key === "open") {
+        bar.open = original.open + deltaPrice;
+        bar.high = Math.max(original.high, bar.open, original.close);
+        bar.low = Math.min(original.low, bar.open, original.close);
+      }
+      if (key === "close") {
+        bar.close = original.close + deltaPrice;
+        bar.high = Math.max(original.high, bar.open, bar.close);
+        bar.low = Math.min(original.low, bar.open, bar.close);
+      }
       renderChart();
       return;
     }

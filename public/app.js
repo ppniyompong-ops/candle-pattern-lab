@@ -202,10 +202,14 @@
   }
 
   function getPreviewBar() {
-    if (!state.drawing) return null;
+    // Preview bars are only for a new candle gesture. Selection, handle edits,
+    // and chart panning use the same transient state object but have no prices.
+    if (!state.drawing || state.drawing.panning || state.drawing.adjusting) return null;
     const start = state.drawing.startPrice;
     let end = state.drawing.endPrice;
     const drawingRange = state.drawing.range;
+    if (!Number.isFinite(start) || !Number.isFinite(end) ||
+        !Number.isFinite(drawingRange?.min) || !Number.isFinite(drawingRange?.max)) return null;
     const spread = Math.max(drawingRange.max - drawingRange.min, Math.abs(start) * 0.02);
     if (Math.abs(end - start) < spread * 0.012) end = start + (state.drawing.tool === "bear" ? -1 : 1) * spread * 0.012;
     const isBull = state.drawing.tool === "bull";

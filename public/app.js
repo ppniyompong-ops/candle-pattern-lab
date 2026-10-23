@@ -17,7 +17,7 @@
     bars: sampleBars.map(bar => ({ ...bar })),
     lines: [],
     pathDraft: null,
-    selected: 4,
+    selected: 0,
     selectedLine: null,
     tool: "bull",
     drawing: null,
@@ -524,6 +524,26 @@
     return Math.max(0, Math.min(MAX_BARS - 1, Math.floor(state.viewStart + (x - plot.left) / slot)));
   }
 
+  function candleAt(point) {
+    const slot = (point.plot.right - point.plot.left) / MAX_BARS * state.viewScale;
+    let nearest = null;
+    let nearestDistance = Infinity;
+    state.bars.forEach((bar, index) => {
+      const centerX = point.plot.left + (index + 0.5 - state.viewStart) * slot;
+      const bodyWidth = Math.min(26, Math.max(7, slot * 0.38));
+      const highY = yForPrice(bar.high, priceRange, point.plot);
+      const lowY = yForPrice(bar.low, priceRange, point.plot);
+      const dx = Math.abs(point.x - centerX);
+      if (dx > Math.max(12, bodyWidth / 2 + 5) || point.y < highY - 7 || point.y > lowY + 7) return;
+      const distance = Math.hypot(dx, Math.max(0, highY - point.y, point.y - lowY));
+      if (distance < nearestDistance) {
+        nearest = { index };
+        nearestDistance = distance;
+      }
+    });
+    return nearest;
+  }
+
   function linePositionForX(x, plot) {
     const slot = (plot.right - plot.left) / MAX_BARS * state.viewScale;
     return Math.max(0, Math.min(MAX_BARS, state.viewStart + (x - plot.left) / slot));
@@ -678,34 +698,37 @@
       }
       state.selectedLine = null;
       if (state.bars.length) {
-        const index = Math.min(requestedIndex, state.bars.length - 1);
-        const bar = state.bars[index];
         const slot = (point.plot.right - point.plot.left) / MAX_BARS * state.viewScale;
-        const centerX = point.plot.left + (index + 0.5 - state.viewStart) * slot;
-        const handles = [
-          ["high", yForPrice(bar.high, priceRange, point.plot)],
-          ["open", yForPrice(bar.open, priceRange, point.plot)],
-          ["close", yForPrice(bar.close, priceRange, point.plot)],
-          ["low", yForPrice(bar.low, priceRange, point.plot)]
-        ];
-        const handle = handles.find(([, y]) => Math.hypot(point.x - centerX, point.y - y) < 13);
-        if (handle) {
-          remember();
-          state.selected = index;
-          state.drawing = { adjusting: handle[0], index, range: { ...priceRange } };
-          canvas.setPointerCapture(event.pointerId);
-          renderChart();
-        } else {
-          state.selected = index;
-          state.drawing = {
-            panning: true,
-            moved: false,
-            startX: point.x,
-            initialViewStart: state.viewStart,
-            index
-          };
-          canvas.setPointerCapture(event.pointerId);
+        const selectedBar = state.bars[state.selected];
+        let handle = null;
+        if (selectedBar) {
+          const centerX = point.plot.left + (state.selected + 0.5 - state.viewStart) * slot;
+          const handles = [
+            ["high", yForPrice(selectedBar.high, priceRange, point.plot)],
+            ["open", yForPrice(selectedBar.open, priceRange, point.plot)],
+            ["close", yForPrice(selectedBar.close, priceRange, point.plot)],
+            ["low", yForPrice(selectedBar.low, priceRange, point.plot)]
+          ];
+          handle = handles.find(([, y]) => Math.hypot(point.x - centerX, point.y - y) < 13);
+          if (handle) {
+            remember();
+            const index = state.selected;
+            state.drawing = { adjusting: handle[0], index, range: { ...priceRange } };
+            canvas.setPointerCapture(event.pointerId);
+            renderChart();
+            return;
+          }
         }
+        const hit = candleAt(point);
+        if (hit) state.selected = hit.index;
+        state.drawing = {
+          panning: true,
+          moved: false,
+          startX: point.x,
+          initialViewStart: state.viewStart,
+          index: hit ? hit.index : state.selected
+        };
+        canvas.setPointerCapture(event.pointerId);
       }
       return;
     }
@@ -1128,7 +1151,7 @@
     const patterns = getSavedPatterns();
     const item = {
       id: String(Date.now()) + "-" + Math.random().toString(36).slice(2, 7),
-      name: elements.name.value.trim() || "Untitled pattern",
+      name: elements.name.value.trim() || "EALabtp sl entry",
       bias: elements.bias.value,
       timeframe: elements.timeframe.value,
       description: elements.description.value.trim(),
@@ -1136,7 +1159,8 @@
       lines: cloneLines(state.lines),
       savedAt: new Date().toISOString()
     };
-    writeSavedPatterns([item, ...patterns]);
+    const sameName = pattern => (pattern.name || "Untitled pattern").trim().toLowerCase() === item.name.trim().toLowerCase();
+    writeSavedPatterns([item, ...patterns.filter(pattern => !sameName(pattern))]);
     renderSavedPatterns();
     showToast("บันทึกแพตเทิร์นลงคลังแล้ว");
   });
@@ -1159,7 +1183,7 @@
     state.lines = normalizeLoadedLines(cloneLines(Array.isArray(item.lines) ? item.lines : []));
     state.nextLineId = Math.max(state.nextLineId, ...state.lines.map(line => Number(line.id) + 1).filter(Number.isFinite), 1);
     state.selectedLine = null;
-    state.selected = state.bars.length ? state.bars.length - 1 : -1;
+    state.selected = state.bars.length ? 0 : -1;
     elements.name.value = item.name || "Untitled pattern";
     elements.bias.value = item.bias || "neutral";
     elements.timeframe.value = item.timeframe || "Any";

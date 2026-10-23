@@ -251,5 +251,5 @@ app.get("*", (_req, res) => {
 });
 
 app.listen(port, () => {
-  console.log("Candle Pattern Lab is running on port " + port);
+  console.log("EALab is running on port " + port);
 });

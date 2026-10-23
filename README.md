@@ -1,6 +1,6 @@
-# Candle Pattern Lab
+# EALab
 
-เว็บ dashboard แบบ standalone สำหรับวาดหรืออธิบายแพตเทิร์นแท่งเทียน แล้วให้ Gemini สร้าง JavaScript logic หลายแบบให้เลือก
+เว็บ dashboard สำหรับวาดหรืออธิบายแพตเทิร์นแท่งเทียน แล้วให้ Gemini สร้าง JavaScript logic หลายแบบให้เลือก พัฒนาอยู่ใน repository Candle Pattern Lab
 
 ## เปิดใช้งานในเครื่อง
 

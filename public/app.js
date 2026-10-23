@@ -28,7 +28,8 @@
     logic: "",
     viewScale: 1,
     viewStart: 0.5 - MAX_BARS / 2,
-    nextLineId: 1
+    nextLineId: 1,
+    lockedPriceRange: null
   };
   const elements = {
     barCount: document.getElementById("bar-count"),
@@ -373,7 +374,9 @@
     const plot = chartPlot();
     clampViewStart(plot);
     const preview = getPreviewBar();
-    const range = currentRange(preview?.bar);
+    const range = state.drawing?.adjusting
+      ? state.drawing.range
+      : state.lockedPriceRange || currentRange(preview?.bar);
     priceRange = range;
     ctx.clearRect(0, 0, chartSize.width, chartSize.height);
     drawGrid(plot);
@@ -694,6 +697,7 @@
   }
 
   function fitChart() {
+    state.lockedPriceRange = null;
     state.viewScale = state.bars.length
       ? Math.min(4, MAX_BARS / Math.max(3, state.bars.length + 2))
       : 1;
@@ -1012,6 +1016,7 @@
       return;
     }
     if (state.drawing.adjusting) {
+      state.lockedPriceRange = { ...state.drawing.range };
       state.drawing = null;
       render();
       return;
@@ -1056,6 +1061,7 @@
     if (preview.index < state.bars.length) state.bars[preview.index] = preview.bar;
     else state.bars.push(preview.bar);
     state.selected = preview.index;
+    state.lockedPriceRange = null;
     state.drawing = null;
     render();
   }
@@ -1145,6 +1151,7 @@
     remember();
     state.bars = [];
     state.lines = [];
+    state.lockedPriceRange = null;
     state.selected = -1;
     state.selectedLine = null;
     render();
@@ -1244,6 +1251,7 @@
     }
     remember();
     state.bars = cloneBars(item.candles).slice(0, MAX_BARS);
+    state.lockedPriceRange = null;
     state.lines = normalizeLoadedLines(cloneLines(Array.isArray(item.lines) ? item.lines : []));
     state.nextLineId = Math.max(state.nextLineId, ...state.lines.map(line => Number(line.id) + 1).filter(Number.isFinite), 1);
     state.selectedLine = null;

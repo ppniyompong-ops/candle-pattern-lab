@@ -59,20 +59,21 @@ function validateAiPatternVariant(value) {
   if (!value || typeof value.summary !== "string" || !value.summary.trim() ||
       !Array.isArray(value.candles) || value.candles.length !== 5 || !value.levels) return null;
   const candles = [];
+  const normalizePrice = value => Math.max(0, Math.min(1, value));
   for (const candle of value.candles) {
-    const open = Number(candle?.open);
-    const high = Number(candle?.high);
-    const low = Number(candle?.low);
-    const close = Number(candle?.close);
-    if (![open, high, low, close].every(Number.isFinite) || low < 0 || high > 1 ||
-        high < Math.max(open, close) || low > Math.min(open, close) || open < 0 || open > 1 || close < 0 || close > 1) return null;
+    const rawValues = [candle?.open, candle?.high, candle?.low, candle?.close].map(Number);
+    if (!rawValues.every(Number.isFinite)) return null;
+    const open = normalizePrice(rawValues[0]);
+    const close = normalizePrice(rawValues[3]);
+    const high = Math.max(open, close, normalizePrice(rawValues[1]));
+    const low = Math.min(open, close, normalizePrice(rawValues[2]));
     candles.push({ open: Number(open.toFixed(6)), high: Number(high.toFixed(6)), low: Number(low.toFixed(6)), close: Number(close.toFixed(6)) });
   }
   const levels = {};
   for (const key of ["entry", "tp", "sl"]) {
     const price = Number(value.levels[key]);
-    if (!Number.isFinite(price) || price < 0 || price > 1) return null;
-    levels[key] = Number(price.toFixed(6));
+    if (!Number.isFinite(price)) return null;
+    levels[key] = Number(normalizePrice(price).toFixed(6));
   }
   return { summary: value.summary.trim().slice(0, 500), candles, levels };
 }

@@ -64,6 +64,13 @@
   let chartSize = { width: 0, height: 0 };
   let priceRange = { min: 90, max: 110 };
   let toastTimer = null;
+  const aiInterpretationPanel = document.createElement("section");
+  aiInterpretationPanel.className = "ai-interpretation hidden";
+  aiInterpretationPanel.setAttribute("aria-live", "polite");
+  const aiInterpretationStyles = document.createElement("style");
+  aiInterpretationStyles.textContent = ".ai-interpretation{margin:0 0 16px;padding:14px;border:1px solid #283746;border-radius:12px;background:linear-gradient(145deg,rgba(24,36,48,.96),rgba(14,21,29,.98))}.ai-interpretation h3{margin:0 0 6px;color:#e9f1fa;font-size:14px}.ai-interpretation .ai-lead{margin:0 0 12px;color:#afc0d1;font-size:12px;line-height:1.55}.ai-interpretation .ai-description{margin:0 0 14px;padding:10px 11px;color:#cad8e5;background:rgba(8,13,19,.55);border-left:2px solid #78b9f5;border-radius:5px;font-size:12px;line-height:1.6;white-space:pre-wrap}.ai-variant-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,270px),1fr));gap:10px}.ai-variant-card{min-width:0;padding:11px;border:1px solid #293746;border-radius:10px;background:rgba(8,13,19,.58)}.ai-variant-card h4{margin:0 0 5px;color:#e7eef7;font-size:13px}.ai-variant-card p{min-height:34px;margin:0 0 8px;color:#aebdcb;font-size:11px;line-height:1.5}.ai-variant-card canvas{display:block;width:100%;height:auto;border:1px solid #24303d;border-radius:6px;background:#0c1219}.ai-variant-card button{width:100%;margin-top:9px;padding:8px 10px;border:1px solid #3d6588;border-radius:7px;color:#dceeff;background:#17314a;cursor:pointer;font:inherit;font-size:11px;font-weight:700}.ai-variant-card button:hover{background:#214464}";
+  document.head.append(aiInterpretationStyles);
+  elements.logicOptions.parentNode.insertBefore(aiInterpretationPanel, elements.logicOptions);
 
   function cloneBars(bars) {
     return bars.map(bar => ({ ...bar }));
@@ -103,6 +110,10 @@
     }).reverse();
     const seenIds = new Set();
     normalized.forEach(line => {
+      if (line.kind === "level") {
+        if (!Number.isFinite(Number(line.x1))) line.x1 = 0;
+        if (!Number.isFinite(Number(line.x2))) line.x2 = 5;
+      }
       if (!Number.isFinite(Number(line.id)) || seenIds.has(Number(line.id))) line.id = state.nextLineId++;
       else line.id = Number(line.id);
       seenIds.add(line.id);
@@ -246,8 +257,8 @@
       ctx.strokeRect(centerX - bodyWidth / 2 - 3, bodyTop - 3, bodyWidth + 6, bodyHeight + 6);
       if (state.tool === "select") {
         const handles = [
-          ["high", centerX, highY], ["open", centerX - bodyWidth / 2 - 3, openY],
-          ["close", centerX + bodyWidth / 2 + 3, closeY], ["low", centerX, lowY]
+          ["high", centerX, highY], ["open", centerX, openY],
+          ["close", centerX, closeY], ["low", centerX, lowY]
         ];
         handles.forEach(([key, x, y]) => {
           ctx.beginPath();
@@ -287,22 +298,25 @@
     ctx.beginPath();
     if (line.kind === "level") {
       const y = yForPrice(line.price, range, plot);
-      ctx.moveTo(plot.left, y);
-      ctx.lineTo(plot.right, y);
+      const x1 = lineX(Number.isFinite(line.x1) ? line.x1 : 0, plot);
+      const x2 = lineX(Number.isFinite(line.x2) ? line.x2 : 5, plot);
+      const segmentRight = Math.max(x1, x2);
+      ctx.moveTo(Math.min(x1, x2), y);
+      ctx.lineTo(segmentRight, y);
       ctx.stroke();
       ctx.setLineDash([]);
       const label = line.levelType.toUpperCase();
       ctx.font = "600 9px Manrope, sans-serif";
       const labelWidth = ctx.measureText(label).width + 12;
-      const labelX = Math.max(plot.left + 2, plot.right - labelWidth - 3);
+      const labelX = Math.max(plot.left + 2, Math.min(plot.right - labelWidth - 3, segmentRight - labelWidth - 3));
       const labelY = Math.max(plot.top + 2, Math.min(plot.bottom - 17, y - 8));
       ctx.globalAlpha = preview ? 0.7 : 0.92;
       ctx.fillRect(labelX, labelY, labelWidth, 16);
       ctx.fillStyle = "#0b1118";
       ctx.fillText(label, labelX + 6, labelY + 11);
-      if (selected) {
+      if (selected && segmentRight >= plot.left && segmentRight <= plot.right) {
         ctx.beginPath();
-        ctx.arc(plot.right - labelWidth - 8, y, 4, 0, Math.PI * 2);
+        ctx.arc(segmentRight, y, 4, 0, Math.PI * 2);
         ctx.fillStyle = color;
         ctx.fill();
       }
@@ -384,7 +398,7 @@
     if (preview) drawCandle(preview.bar, preview.index, plot, range, true);
     state.lines.forEach(line => drawAnnotation(line, plot, range));
     if (state.drawing?.kind === "line") drawAnnotation(state.drawing, plot, range, true);
-    if (state.drawing?.kind === "level") drawAnnotation({ kind: "level", levelType: state.drawing.levelType, price: state.drawing.price }, plot, range, true);
+    if (state.drawing?.kind === "level") drawAnnotation({ kind: "level", levelType: state.drawing.levelType, x1: state.drawing.x1, x2: state.drawing.x2, price: state.drawing.price }, plot, range, true);
     if (state.drawing?.kind === "rectangle") drawAnnotation(state.drawing, plot, range, true);
     if (state.pathDraft) {
       const points = state.pathDraft.preview
@@ -447,7 +461,12 @@
     const span = high - low || 1;
     const normalizeY = price => Number(((price - low) / span).toFixed(6));
     return lines.map(line => {
-      if (line.kind === "level") return { type: line.levelType, y: normalizeY(line.price) };
+      if (line.kind === "level") return {
+        type: line.levelType,
+        y: normalizeY(line.price),
+        x1: Number(((Number.isFinite(line.x1) ? line.x1 : 0) / MAX_BARS).toFixed(6)),
+        x2: Number(((Number.isFinite(line.x2) ? line.x2 : 5) / MAX_BARS).toFixed(6))
+      };
       if (line.kind === "rectangle") return {
         type: "rectangle",
         x1: Number((line.x1 / MAX_BARS).toFixed(6)),
@@ -568,40 +587,24 @@
     const slot = (plot.right - plot.left) / MAX_BARS * state.viewScale;
     const centerX = plot.left + (index + 0.5 - state.viewStart) * slot;
     const bodyWidth = Math.min(26, Math.max(7, slot * 0.38));
-    const openY = yForPrice(bar.open, priceRange, plot);
-    const closeY = yForPrice(bar.close, priceRange, plot);
+    if (Math.abs(point.x - centerX) > Math.max(11, bodyWidth / 2 + 5)) return null;
     const highY = yForPrice(bar.high, priceRange, plot);
     const lowY = yForPrice(bar.low, priceRange, plot);
+    const openY = yForPrice(bar.open, priceRange, plot);
+    const closeY = yForPrice(bar.close, priceRange, plot);
     const bodyTop = Math.min(openY, closeY);
     const bodyBottom = Math.max(openY, closeY);
-    const wickHitRadius = 8;
-    const handleHitRadius = 10;
-    if (point.x < centerX - bodyWidth / 2 - handleHitRadius ||
-        point.x > centerX + bodyWidth / 2 + handleHitRadius) return null;
-
-    // Hit-test visible wick segments first so the wider candle body cannot
-    // steal a drag intended for the high or low handle.
-    if (point.y <= bodyTop &&
-        distanceToSegment(point.x, point.y, centerX, highY, centerX, bodyTop) <= wickHitRadius) return "high";
-    if (point.y >= bodyBottom &&
-        distanceToSegment(point.x, point.y, centerX, bodyBottom, centerX, lowY) <= wickHitRadius) return "low";
-
-    const handles = [
-      ["high", centerX, highY],
-      ["low", centerX, lowY],
-      ["open", centerX - bodyWidth / 2 - 3, openY],
-      ["close", centerX + bodyWidth / 2 + 3, closeY]
-    ];
-    let nearest = null;
-    let nearestDistance = handleHitRadius;
-    handles.forEach(([part, x, y]) => {
-      const distance = Math.hypot(point.x - x, point.y - y);
-      if (distance <= nearestDistance) {
-        nearest = part;
-        nearestDistance = distance;
-      }
-    });
-    return nearest;
+    const hitRadius = 10;
+    if (point.y <= bodyTop + hitRadius &&
+        distanceToSegment(point.x, point.y, centerX, highY, centerX, bodyTop) <= hitRadius) return "high";
+    if (point.y >= bodyBottom - hitRadius &&
+        distanceToSegment(point.x, point.y, centerX, bodyBottom, centerX, lowY) <= hitRadius) return "low";
+    if (point.y >= bodyTop - hitRadius && point.y <= bodyBottom + hitRadius) {
+      return Math.abs(point.y - openY) <= Math.abs(point.y - closeY) ? "open" : "close";
+    }
+    if (Math.abs(point.y - highY) <= hitRadius) return "high";
+    if (Math.abs(point.y - lowY) <= hitRadius) return "low";
+    return null;
   }
 
   function linePositionForX(x, plot) {
@@ -621,7 +624,10 @@
     for (let index = state.lines.length - 1; index >= 0; index -= 1) {
       const line = state.lines[index];
       if (line.kind === "level") {
-        if (Math.abs(point.y - yForPrice(line.price, priceRange, point.plot)) < 8) return line;
+        const x1 = lineX(Number.isFinite(line.x1) ? line.x1 : 0, point.plot);
+        const x2 = lineX(Number.isFinite(line.x2) ? line.x2 : 5, point.plot);
+        const withinSegment = point.x >= Math.min(x1, x2) - 6 && point.x <= Math.max(x1, x2) + 6;
+        if (withinSegment && Math.abs(point.y - yForPrice(line.price, priceRange, point.plot)) < 8) return line;
       } else if (line.kind === "rectangle") {
         const x1 = lineX(line.x1, point.plot);
         const y1 = yForPrice(line.price1, priceRange, point.plot);
@@ -695,7 +701,7 @@
     const plot = chartPlot();
     const oldSlot = (plot.right - plot.left) / MAX_BARS * state.viewScale;
     const anchorIndex = state.viewStart + (anchorX - plot.left) / oldSlot;
-    state.viewScale = Math.max(0.2, Math.min(4, nextScale));
+    state.viewScale = Math.max(0.7, Math.min(4, nextScale));
     const newSlot = (plot.right - plot.left) / MAX_BARS * state.viewScale;
     state.viewStart = anchorIndex - (anchorX - plot.left) / newSlot;
     clampViewStart(plot);
@@ -709,7 +715,7 @@
     const zoomIn = document.getElementById("zoom-in");
     const zoomOut = document.getElementById("zoom-out");
     if (zoomIn) zoomIn.disabled = state.viewScale >= 4;
-    if (zoomOut) zoomOut.disabled = state.viewScale <= 0.2;
+    if (zoomOut) zoomOut.disabled = state.viewScale <= 0.7;
   }
 
   function fitChart() {
@@ -777,13 +783,7 @@
         if (hit) state.selected = hit.index;
         if (part) {
           remember();
-          state.drawing = {
-            adjusting: part,
-            index: targetIndex,
-            range: { ...priceRange },
-            startY: point.y,
-            startBar: { ...state.bars[targetIndex] }
-          };
+          state.drawing = { adjusting: part, index: targetIndex, range: { ...priceRange } };
           canvas.setPointerCapture(event.pointerId);
           renderChart();
           return;
@@ -864,9 +864,11 @@
           range: { ...priceRange }
         };
       } else {
+        const levelStart = Math.max(0, Math.min(MAX_BARS - 5, linePositionForX(point.x, point.plot)));
         state.drawing = {
           kind: "level", levelType: state.tool,
           replaceId: existingLevel?.id,
+          x1: levelStart, x2: levelStart + 5,
           price: priceForY(point.y), range: { ...priceRange }
         };
       }
@@ -985,25 +987,14 @@
       return;
     }
     if (state.drawing.adjusting) {
-      const drawing = state.drawing;
-      const bar = state.bars[drawing.index];
-      const original = drawing.startBar;
-      const range = drawing.range;
-      const deltaPrice = (drawing.startY - point.y) / (point.plot.bottom - point.plot.top) *
-        (range.max - range.min);
-      const key = drawing.adjusting;
-      if (key === "high") bar.high = Math.max(original.high + deltaPrice, original.open, original.close);
-      if (key === "low") bar.low = Math.min(original.low + deltaPrice, original.open, original.close);
-      if (key === "open") {
-        bar.open = original.open + deltaPrice;
-        bar.high = Math.max(original.high, bar.open, original.close);
-        bar.low = Math.min(original.low, bar.open, original.close);
-      }
-      if (key === "close") {
-        bar.close = original.close + deltaPrice;
-        bar.high = Math.max(original.high, bar.open, bar.close);
-        bar.low = Math.min(original.low, bar.open, bar.close);
-      }
+      const bar = state.bars[state.drawing.index];
+      const range = state.drawing.range;
+      const price = range.max - fraction * (range.max - range.min);
+      const key = state.drawing.adjusting;
+      if (key === "high") bar.high = Math.max(price, bar.open, bar.close);
+      if (key === "low") bar.low = Math.min(price, bar.open, bar.close);
+      if (key === "open") { bar.open = price; bar.high = Math.max(bar.high, price); bar.low = Math.min(bar.low, price); }
+      if (key === "close") { bar.close = price; bar.high = Math.max(bar.high, price); bar.low = Math.min(bar.low, price); }
       renderChart();
       return;
     }
@@ -1076,7 +1067,7 @@
       remember();
       const id = draft.kind === "level" && draft.replaceId ? draft.replaceId : state.nextLineId++;
       const annotation = draft.kind === "level"
-        ? { id, kind: "level", levelType: draft.levelType, price: draft.price }
+        ? { id, kind: "level", levelType: draft.levelType, x1: draft.x1, x2: draft.x2, price: draft.price }
         : { id, kind: draft.kind, x1: draft.x1, x2: draft.x2, price1: draft.price1, price2: draft.price2 };
       if (draft.kind === "level" && draft.replaceId) {
         state.lines = state.lines.map(line => line.id === draft.replaceId ? annotation : line);
@@ -1331,7 +1322,133 @@
     elements.downloadButton.disabled = false;
   }
 
-  function showLogicOptions(options) {
+  function drawAiVariantPreview(canvasElement, variant) {
+    const width = 760;
+    const height = 190;
+    canvasElement.width = width;
+    canvasElement.height = height;
+    const previewCtx = canvasElement.getContext("2d");
+    const left = 16;
+    const top = 14;
+    const bottom = height - 15;
+    const right = width - 82;
+    const plotHeight = bottom - top;
+    const plotWidth = right - left;
+    const yForNormalized = value => top + (1 - value) * plotHeight;
+    previewCtx.clearRect(0, 0, width, height);
+    previewCtx.fillStyle = "#0c1219";
+    previewCtx.fillRect(0, 0, width, height);
+    previewCtx.strokeStyle = "rgba(126,146,166,.14)";
+    previewCtx.lineWidth = 1;
+    for (let row = 0; row <= 4; row += 1) {
+      const y = top + plotHeight * row / 4;
+      previewCtx.beginPath();
+      previewCtx.moveTo(left, y);
+      previewCtx.lineTo(right, y);
+      previewCtx.stroke();
+    }
+    const levelColors = { entry: "#78b9f5", tp: "#72d9ad", sl: "#f17d87" };
+    ["entry", "tp", "sl"].forEach(level => {
+      const y = yForNormalized(variant.levels[level]);
+      previewCtx.save();
+      previewCtx.strokeStyle = levelColors[level];
+      previewCtx.globalAlpha = .78;
+      previewCtx.setLineDash([6, 5]);
+      previewCtx.beginPath();
+      previewCtx.moveTo(left, y);
+      previewCtx.lineTo(right, y);
+      previewCtx.stroke();
+      previewCtx.setLineDash([]);
+      previewCtx.globalAlpha = .95;
+      previewCtx.fillStyle = levelColors[level];
+      previewCtx.font = "700 11px Manrope, sans-serif";
+      previewCtx.fillText(level.toUpperCase(), right + 10, Math.max(top + 10, Math.min(bottom - 2, y + 4)));
+      previewCtx.restore();
+    });
+    const slot = plotWidth / 5;
+    variant.candles.forEach((candle, index) => {
+      const x = left + (index + .5) * slot;
+      const color = candle.close >= candle.open ? "#72d9ad" : "#f17d87";
+      const openY = yForNormalized(candle.open);
+      const closeY = yForNormalized(candle.close);
+      previewCtx.strokeStyle = color;
+      previewCtx.fillStyle = color;
+      previewCtx.lineWidth = 2;
+      previewCtx.beginPath();
+      previewCtx.moveTo(x, yForNormalized(candle.high));
+      previewCtx.lineTo(x, yForNormalized(candle.low));
+      previewCtx.stroke();
+      const bodyTop = Math.min(openY, closeY);
+      const bodyHeight = Math.max(4, Math.abs(closeY - openY));
+      previewCtx.fillRect(x - Math.min(20, slot * .24), bodyTop, Math.min(40, slot * .48), bodyHeight);
+    });
+  }
+
+  function applyAiVariant(variant, direction, improvedDescription) {
+    remember();
+    const toPrice = value => 100 + Number(value) * 10;
+    state.bars = variant.candles.map(candle => ({
+      open: toPrice(candle.open), high: toPrice(candle.high), low: toPrice(candle.low), close: toPrice(candle.close)
+    }));
+    state.lines = ["entry", "tp", "sl"].map(levelType => ({
+      id: state.nextLineId++, kind: "level", levelType,
+      x1: 0, x2: 5, price: toPrice(variant.levels[levelType])
+    }));
+    state.selected = 0;
+    state.selectedLine = null;
+    state.drawing = null;
+    state.pathDraft = null;
+    state.lockedPriceRange = null;
+    state.viewScale = 1;
+    elements.bias.value = direction;
+    elements.description.value = improvedDescription;
+    elements.finishPathButton.classList.add("hidden");
+    render();
+    showToast("วางแบบขา" + (direction === "bullish" ? "ขึ้น" : "ลง") + " 5 แท่งพร้อม Entry/TP/SL แล้ว");
+  }
+
+  function renderAiInterpretation(interpretation) {
+    aiInterpretationPanel.replaceChildren();
+    if (!interpretation || !interpretation.bullish || !interpretation.bearish) {
+      aiInterpretationPanel.classList.add("hidden");
+      return;
+    }
+    const title = document.createElement("h3");
+    title.textContent = "AI อ่านแพตเทิร์นและสร้างภาพตัวอย่าง";
+    const summary = document.createElement("p");
+    summary.className = "ai-lead";
+    summary.textContent = interpretation.summary;
+    const description = document.createElement("p");
+    description.className = "ai-description";
+    description.textContent = interpretation.improvedDescription;
+    const grid = document.createElement("div");
+    grid.className = "ai-variant-grid";
+    [
+      { direction: "bullish", title: "ขาขึ้น", variant: interpretation.bullish },
+      { direction: "bearish", title: "ขาลง", variant: interpretation.bearish }
+    ].forEach(item => {
+      const card = document.createElement("article");
+      card.className = "ai-variant-card";
+      const heading = document.createElement("h4");
+      heading.textContent = item.title + " · 5 แท่ง HLOC";
+      const note = document.createElement("p");
+      note.textContent = item.variant.summary;
+      const chart = document.createElement("canvas");
+      chart.setAttribute("role", "img");
+      chart.setAttribute("aria-label", item.title + " pattern with five candles and Entry, TP, SL levels");
+      drawAiVariantPreview(chart, item.variant);
+      const applyButton = document.createElement("button");
+      applyButton.type = "button";
+      applyButton.textContent = "ใช้แบบขา" + (item.direction === "bullish" ? "ขึ้น" : "ลง") + " บนกราฟ";
+      applyButton.addEventListener("click", () => applyAiVariant(item.variant, item.direction, interpretation.improvedDescription));
+      card.append(heading, note, chart, applyButton);
+      grid.append(card);
+    });
+    aiInterpretationPanel.append(title, summary, description, grid);
+    aiInterpretationPanel.classList.remove("hidden");
+  }
+
+  function showLogicOptions(options, interpretation) {
     state.options = options;
     state.selectedOptionId = "";
     state.logic = "";
@@ -1360,6 +1477,7 @@
       button.addEventListener("click", () => selectLogicOption(option.id));
       elements.logicOptions.append(button);
     });
+    renderAiInterpretation(interpretation);
   }
 
   function showToast(message) {
@@ -1374,6 +1492,7 @@
       showToast("วาดแท่งเทียน วาดเส้น หรือเขียนคำอธิบายแพตเทิร์นก่อน");
       return;
     }
+    aiInterpretationPanel.classList.add("hidden");
     elements.generateButton.disabled = true;
     elements.generateLabel.textContent = "กำลังวิเคราะห์รูปแบบ…";
     elements.generateButton.querySelector(".sparkle").textContent = "◌";
@@ -1396,7 +1515,10 @@
       if (!Array.isArray(data.options) || data.options.length !== 3) {
         throw new Error("AI ส่งตัวเลือกมาไม่ครบ ลองสร้างใหม่อีกครั้ง");
       }
-      showLogicOptions(data.options);
+      if (!data.interpretation || !data.interpretation.bullish || !data.interpretation.bearish) {
+        throw new Error("AI ยังไม่ได้ส่งภาพขาขึ้นและขาลง กรุณาลองใหม่อีกครั้ง");
+      }
+      showLogicOptions(data.options, data.interpretation);
       showToast("ได้ logic 3 แบบแล้ว เลือกแบบที่ตรงที่สุด");
     } catch (error) {
       showLogicMessage(error.message || "เกิดข้อผิดพลาดขณะเรียก AI");

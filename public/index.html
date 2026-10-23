@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0b1118">
+  <meta name="description" content="วาดแพตเทิร์นแท่งเทียนและให้ AI ช่วยเขียนกฎตรวจจับด้วย JavaScript">
+  <title>Candle Pattern Lab</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <a class="brand" href="#chart-title" aria-label="Candle Pattern Lab">
+        <span class="brand-mark">✦</span>
+        <span>Candle<span class="brand-ai">Code</span></span>
+      </a>
+      <div class="side-label">WORKSPACE</div>
+      <nav class="sidebar-nav" aria-label="เมนูหลัก">
+        <a class="nav-link active" href="#chart-title" aria-current="page"><span class="nav-icon">▥</span><span>Pattern Studio</span><span class="nav-arrow">●</span></a>
+        <a class="nav-link" href="#saved-title"><span class="nav-icon">▤</span><span>คลังแพตเทิร์น</span><span class="nav-arrow">↗</span></a>
+      </nav>
+      <div class="side-divider"></div>
+      <div class="side-label">YOUR WORKSPACE</div>
+      <div class="sidebar-note">
+        <span class="note-dot"></span>
+        <div><strong>Pattern canvas</strong><small>บันทึกไว้ในเบราว์เซอร์นี้</small></div>
+      </div>
+      <div class="sidebar-spacer"></div>
+      <div class="sidebar-tip">
+        <span class="tip-icon">✳</span>
+        <div><strong>วาดให้ชัด แล้วให้ AI ช่วยต่อ</strong><p>กำหนดแท่งเทียนที่ต้องการ จากนั้นให้ Gemini เสนอ logic สำหรับตรวจจับ</p></div>
+      </div>
+      <div class="sidebar-foot"><span class="status-dot"></span>LOCAL WORKSPACE <span class="version">v1.0</span></div>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <div class="breadcrumbs"><span>WORKSPACE</span><b>/</b><span>RESEARCH TOOLS</span></div>
+        <a class="top-link" href="#saved-title">คลังแพตเทิร์น <span>↗</span></a>
+      </header>
+
+      <section class="page-heading">
+        <div>
+          <div class="eyebrow"><span class="eyebrow-line"></span>PRICE ACTION WORKSPACE</div>
+          <h1>Candle Pattern <span>Lab</span></h1>
+          <p>วาดแท่งเทียนตามไอเดียของคุณ แล้วเปลี่ยนภาพให้เป็นกฎตรวจจับที่นำไปต่อยอดได้</p>
+        </div>
+        <div class="heading-badge"><span class="live-dot"></span><span>พร้อมสร้างแพตเทิร์น</span></div>
+      </section>
+
+      <section class="workspace-grid">
+        <div class="left-column">
+          <section class="panel chart-panel" aria-labelledby="chart-title">
+            <div class="panel-top">
+              <div>
+                <div class="panel-kicker">DRAWING BOARD <span class="kicker-dot">•</span> <span id="bar-count">5 BARS</span></div>
+                <h2 id="chart-title">พื้นที่วาดแท่งเทียน</h2>
+              </div>
+              <div class="chart-actions">
+                <button id="undo-button" class="icon-button" type="button" title="ย้อนกลับ" aria-label="ย้อนกลับ" disabled>↶</button>
+                <button id="redo-button" class="icon-button" type="button" title="ทำซ้ำ" aria-label="ทำซ้ำ" disabled>↷</button>
+                <button id="clear-button" class="text-button" type="button">ล้างภาพ</button>
+              </div>
+            </div>
+
+            <div class="toolbar" role="toolbar" aria-label="เครื่องมือวาด">
+              <div class="tool-group">
+                <button class="tool-button active" type="button" data-tool="bull" aria-pressed="true"><span class="tool-candle bull-swatch"></span><span>แท่งขึ้น</span></button>
+                <button class="tool-button" type="button" data-tool="bear" aria-pressed="false"><span class="tool-candle bear-swatch"></span><span>แท่งลง</span></button>
+                <button class="tool-button" type="button" data-tool="select" aria-pressed="false"><span class="tool-glyph">⌖</span><span>เลือก</span></button>
+                <button class="tool-button" type="button" data-tool="erase" aria-pressed="false"><span class="tool-glyph">⌫</span><span>ลบแท่ง</span></button>
+              </div>
+              <div class="toolbar-hint"><span class="hint-pip"></span><span id="tool-hint">ลากจากราคาเปิดไปยังราคาปิด</span></div>
+            </div>
+
+            <div class="chart-frame">
+              <div class="chart-y-labels" aria-hidden="true"><span id="axis-top">—</span><span id="axis-upper">—</span><span id="axis-mid">—</span><span id="axis-lower">—</span><span id="axis-bottom">—</span></div>
+              <canvas id="candle-canvas" tabindex="0" role="application" aria-label="พื้นที่วาดกราฟแท่งเทียน ใช้เมาส์ลากเพื่อวาด เลือก หรือลบแท่ง"></canvas>
+              <div class="chart-empty hidden" id="empty-hint"><span>✳</span><strong>เริ่มวาดแพตเทิร์นของคุณ</strong><small>เลือกแท่งขึ้นหรือแท่งลง แล้วลากบนกราฟ</small></div>
+            </div>
+            <div class="chart-x-labels"><span>ก่อนหน้า</span><div class="x-track"></div><span>ล่าสุด <b id="latest-bar-label">05</b></span></div>
+            <div class="chart-legend">
+              <span><i class="legend-candle up"></i> แท่งขึ้น</span>
+              <span><i class="legend-candle down"></i> แท่งลง</span>
+              <span class="legend-spacer"></span>
+              <span class="selected-readout" id="selected-readout">เลือกแท่งเทียนเพื่อแก้ค่า OHLC</span>
+            </div>
+          </section>
+
+          <section class="panel editor-panel" aria-labelledby="editor-title">
+            <div class="panel-top editor-heading">
+              <div>
+                <div class="panel-kicker">SELECTED CANDLE <span class="kicker-dot">•</span> <span id="selected-label">BAR 05</span></div>
+                <h2 id="editor-title">ปรับค่า OHLC</h2>
+              </div>
+              <span class="edit-lock"><span>●</span>แก้ไขได้</span>
+            </div>
+            <form id="ohlc-form" class="ohlc-grid">
+              <label class="ohlc-field open-field"><span><i></i> OPEN</span><div><small>ราคาเปิด</small><input id="ohlc-open" type="number" step="any" inputmode="decimal" aria-label="ราคาเปิด"></div></label>
+              <label class="ohlc-field high-field"><span><i></i> HIGH</span><div><small>ราคาสูงสุด</small><input id="ohlc-high" type="number" step="any" inputmode="decimal" aria-label="ราคาสูงสุด"></div></label>
+              <label class="ohlc-field low-field"><span><i></i> LOW</span><div><small>ราคาต่ำสุด</small><input id="ohlc-low" type="number" step="any" inputmode="decimal" aria-label="ราคาต่ำสุด"></div></label>
+              <label class="ohlc-field close-field"><span><i></i> CLOSE</span><div><small>ราคาปิด</small><input id="ohlc-close" type="number" step="any" inputmode="decimal" aria-label="ราคาปิด"></div></label>
+              <button class="apply-button" type="submit">อัปเดตแท่ง <span>↗</span></button>
+            </form>
+            <p class="form-error" id="ohlc-error" role="alert"></p>
+          </section>
+
+          <section class="panel saved-panel" aria-labelledby="saved-title">
+            <div class="panel-top">
+              <div><div class="panel-kicker">YOUR LIBRARY</div><h2 id="saved-title">แพตเทิร์นที่บันทึกไว้</h2></div>
+              <span class="saved-count" id="saved-count">0 รายการ</span>
+            </div>
+            <div id="saved-patterns" class="saved-patterns"><p class="saved-empty">ยังไม่มีแพตเทิร์นที่บันทึกไว้</p></div>
+          </section>
+        </div>
+
+        <aside class="right-column">
+          <section class="panel setup-panel" aria-labelledby="setup-title">
+            <div class="panel-kicker">PATTERN SETUP</div>
+            <h2 id="setup-title">ตั้งค่าแพตเทิร์น</h2>
+            <label class="field-label" for="pattern-name">ชื่อแพตเทิร์น</label>
+            <input id="pattern-name" class="full-input" type="text" maxlength="48" value="Bullish reversal idea" autocomplete="off">
+            <div class="setup-row">
+              <label><span class="field-label">มุมมอง</span><select id="pattern-bias"><option value="bullish">Bullish</option><option value="bearish">Bearish</option><option value="neutral">Neutral</option></select></label>
+              <label><span class="field-label">กรอบเวลา</span><select id="pattern-timeframe"><option>Any</option><option>1m</option><option>5m</option><option>15m</option><option>1h</option><option>4h</option><option>1D</option><option>1W</option></select></label>
+            </div>
+            <button class="save-button" id="save-pattern" type="button"><span class="save-icon">＋</span>บันทึกลงคลัง <span class="save-shortcut">LOCAL</span></button>
+            <div class="setup-footer"><span class="shield-icon">◈</span><span>ข้อมูลแพตเทิร์นเก็บไว้ในเบราว์เซอร์นี้</span></div>
+          </section>
+
+          <section class="panel ai-panel" aria-labelledby="ai-title">
+            <div class="ai-heading">
+              <div class="ai-icon">✳</div>
+              <div><div class="panel-kicker">GEMINI ASSIST</div><h2 id="ai-title">ให้ AI เขียน logic</h2></div>
+              <span class="ai-status">AI</span>
+            </div>
+            <p class="ai-description">ส่งรูปแบบ OHLC ที่วาดให้ Stock Co-Pilot ช่วยสร้าง JavaScript function สำหรับตรวจจับแพตเทิร์นนี้</p>
+            <div class="ai-context">
+              <div><span class="context-icon">▥</span><span>อินพุต</span><strong id="ai-bar-count">5 candles</strong></div>
+              <div><span class="context-icon">⌘</span><span>เอาต์พุต</span><strong>JavaScript</strong></div>
+              <div><span class="context-icon">◎</span><span>โหมด</span><strong>Rule based</strong></div>
+            </div>
+            <button class="generate-button" id="generate-logic" type="button"><span class="sparkle">✦</span><span id="generate-label">สร้าง logic ด้วย AI</span><span class="button-arrow">↗</span></button>
+            <div class="ai-note"><span>ⓘ</span><span>AI อาจตีความรูปแบบคลาดเคลื่อน โปรดตรวจโค้ดและทดสอบกับข้อมูลย้อนหลัง</span></div>
+          </section>
+
+          <section class="panel logic-panel" aria-labelledby="logic-title">
+            <div class="logic-top">
+              <div><div class="panel-kicker">LOGIC OUTPUT</div><h2 id="logic-title">ผลลัพธ์จาก AI</h2></div>
+              <button id="copy-logic" class="copy-button" type="button" disabled><span>▣</span>คัดลอก</button>
+            </div>
+            <div class="logic-body" id="logic-body">
+              <div class="logic-placeholder"><span class="placeholder-icon">⌘</span><strong>logic จะปรากฏที่นี่</strong><p>วาดแท่งเทียนอย่างน้อย 1 แท่ง แล้วให้ AI เสนอ function สำหรับตรวจจับแพตเทิร์น</p></div>
+              <pre id="logic-output" class="hidden" aria-live="polite"></pre>
+            </div>
+            <div class="logic-foot"><span><i class="logic-dot"></i> JavaScript</span><button id="download-logic" type="button" disabled>ดาวน์โหลด .js <span>↓</span></button></div>
+          </section>
+        </aside>
+      </section>
+
+      <footer class="page-footer"><span>CANDLECODE · PATTERN LAB</span><span>สร้าง logic เพื่อการศึกษา · ไม่ใช่สัญญาณซื้อขาย</span></footer>
+    </main>
+  </div>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <script src="/app.js"></script>
+</body>
+</html>

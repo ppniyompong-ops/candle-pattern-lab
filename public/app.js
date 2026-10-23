@@ -695,7 +695,7 @@
     const plot = chartPlot();
     const oldSlot = (plot.right - plot.left) / MAX_BARS * state.viewScale;
     const anchorIndex = state.viewStart + (anchorX - plot.left) / oldSlot;
-    state.viewScale = Math.max(0.7, Math.min(4, nextScale));
+    state.viewScale = Math.max(0.2, Math.min(4, nextScale));
     const newSlot = (plot.right - plot.left) / MAX_BARS * state.viewScale;
     state.viewStart = anchorIndex - (anchorX - plot.left) / newSlot;
     clampViewStart(plot);
@@ -709,7 +709,7 @@
     const zoomIn = document.getElementById("zoom-in");
     const zoomOut = document.getElementById("zoom-out");
     if (zoomIn) zoomIn.disabled = state.viewScale >= 4;
-    if (zoomOut) zoomOut.disabled = state.viewScale <= 0.7;
+    if (zoomOut) zoomOut.disabled = state.viewScale <= 0.2;
   }
 
   function fitChart() {

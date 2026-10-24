@@ -18,6 +18,7 @@
     lines: [],
     pathDraft: null,
     selected: 0,
+    manualOrderArmed: false,
     selectedLine: null,
     tool: "bull",
     drawing: null,
@@ -132,6 +133,7 @@
     state.selected = state.bars.length ? Math.min(Math.max(state.selected, 0), state.bars.length - 1) : -1;
     state.selectedLine = null;
     state.pathDraft = null;
+    state.manualOrderArmed = false;
     elements.finishPathButton.classList.add("hidden");
   }
 
@@ -150,7 +152,7 @@
   function chartPlot() {
     return {
       left: 12,
-      right: Math.max(20, chartSize.width - 10),
+      right: Math.max(80, chartSize.width - 50),
       top: 13,
       bottom: Math.max(35, chartSize.height - 17)
     };
@@ -199,6 +201,15 @@
   function drawGrid(plot) {
     const styles = getComputedStyle(document.documentElement);
     const gridColor = styles.getPropertyValue("--line-soft").trim() || "rgba(158,180,194,.12)";
+    const axisWidth = Math.max(0, chartSize.width - plot.right);
+    ctx.save();
+    ctx.fillStyle = "rgba(7,13,9,.66)";
+    ctx.fillRect(plot.right, plot.top, axisWidth, plot.bottom - plot.top);
+    ctx.strokeStyle = "rgba(145,174,151,.17)";
+    ctx.beginPath();
+    ctx.moveTo(Math.round(plot.right) + 0.5, plot.top);
+    ctx.lineTo(Math.round(plot.right) + 0.5, plot.bottom);
+    ctx.stroke();
     ctx.lineWidth = 1;
     for (let i = 0; i <= 4; i += 1) {
       const y = plot.top + ((plot.bottom - plot.top) * i) / 4;
@@ -208,6 +219,12 @@
       ctx.moveTo(plot.left, Math.round(y) + 0.5);
       ctx.lineTo(plot.right, Math.round(y) + 0.5);
       ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle = "#8ca194";
+      ctx.font = "9px Manrope, sans-serif";
+      ctx.textAlign = "left";
+      ctx.textBaseline = "middle";
+      ctx.fillText(String(100 - i * 25) + "%", plot.right + 7, y);
     }
     ctx.setLineDash([]);
     const slot = (plot.right - plot.left) / MAX_BARS * state.viewScale;
@@ -222,6 +239,27 @@
       ctx.lineTo(Math.round(x) + 0.5, plot.bottom);
       ctx.stroke();
     }
+    ctx.restore();
+  }
+
+  function drawBarIndexLabels(plot) {
+    const slot = (plot.right - plot.left) / MAX_BARS * state.viewScale;
+    ctx.save();
+    ctx.font = "9px SFMono-Regular, Consolas, monospace";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.beginPath();
+    ctx.strokeStyle = "rgba(145,174,151,.18)";
+    ctx.moveTo(plot.left, Math.round(plot.bottom) + 0.5);
+    ctx.lineTo(plot.right, Math.round(plot.bottom) + 0.5);
+    ctx.stroke();
+    state.bars.forEach((_bar, index) => {
+      const x = plot.left + (index + 0.5 - state.viewStart) * slot;
+      if (x < plot.left || x > plot.right) return;
+      ctx.fillStyle = index === state.selected ? "#9fdbb8" : "rgba(130,153,137,.75)";
+      ctx.fillText(String(index + 1).padStart(2, "0"), x, plot.bottom + 9);
+    });
+    ctx.restore();
   }
 
   function drawCandle(bar, index, plot, range, preview) {
@@ -396,6 +434,10 @@
     priceRange = range;
     ctx.clearRect(0, 0, chartSize.width, chartSize.height);
     drawGrid(plot);
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(plot.left, plot.top, plot.right - plot.left, plot.bottom - plot.top);
+    ctx.clip();
     state.bars.forEach((bar, index) => drawCandle(bar, index, plot, range, false));
     if (preview) drawCandle(preview.bar, preview.index, plot, range, true);
     state.lines.forEach(line => drawAnnotation(line, plot, range));
@@ -422,6 +464,8 @@
       ctx.strokeRect(left, top, right - left, bottom - top);
       ctx.restore();
     }
+    ctx.restore();
+    drawBarIndexLabels(plot);
     elements.emptyHint.classList.toggle("hidden", state.bars.length > 0 || state.lines.length > 0 ||
       ["line", "level", "rectangle"].includes(state.drawing?.kind) || Boolean(state.pathDraft));
   }
@@ -513,6 +557,7 @@
 
   function setTool(tool) {
     if (state.pathDraft && tool !== "path") finishPath();
+    if (tool !== "select") state.manualOrderArmed = false;
     state.tool = tool;
     document.querySelectorAll("[data-tool]").forEach(button => {
       const active = button.dataset.tool === tool;
@@ -522,7 +567,7 @@
     const hints = {
       bull: "เริ่มลากจาก Open ไปยัง Close",
       bear: "เริ่มลากจาก Open ไปยัง Close",
-      select: "คลิกแท่งแล้วกดเลข 1–9, 0 = 10, Shift+1 = 11, Shift+2 = 12 · ลากแท่งหรือจุดจับเพื่อแก้ไข · ลากพื้นที่ว่างเพื่อเลื่อน",
+      select: "คลิกแท่งหนึ่งครั้ง แล้วกดเลขเพื่อกำหนดลำดับ · ลากแท่งหรือจุดจับเพื่อแก้ไข · ลากพื้นที่ว่างเพื่อเลื่อน",
       zoom: "ลากคลุมช่วงบนกราฟเพื่อซูมเข้า · ใช้ปุ่ม − เพื่อซูมออก",
       erase: "คลิกแท่งหรือเส้นที่ต้องการลบ",
       line: "ลากเพื่อวาดเส้นอิสระ",
@@ -755,18 +800,23 @@
   }
 
   function moveSelectedCandleToNumber(number) {
-    if (state.tool !== "select" || state.selectedLine !== null || state.selected < 0 || !state.bars.length) return false;
+    if (state.tool !== "select" || !state.manualOrderArmed || state.selectedLine !== null || state.selected < 0 || !state.bars.length) return false;
     const targetIndex = number - 1;
     if (targetIndex < 0 || targetIndex >= state.bars.length) {
+      state.manualOrderArmed = false;
       showToast("มี " + state.bars.length + " แท่ง เลือกลำดับ 1–" + state.bars.length + " ได้");
       return true;
     }
-    if (targetIndex === state.selected) return true;
+    if (targetIndex === state.selected) {
+      state.manualOrderArmed = false;
+      return true;
+    }
     remember();
     const [bar] = state.bars.splice(state.selected, 1);
     state.bars.splice(targetIndex, 0, bar);
     state.selected = targetIndex;
     state.selectedLine = null;
+    state.manualOrderArmed = false;
     render();
     showToast("ย้ายแท่งที่เลือกเป็นลำดับ " + String(number).padStart(2, "0") + " แล้ว");
     return true;
@@ -810,6 +860,7 @@
     if (state.tool === "select") {
       const line = annotationAt(point);
       if (line) {
+        state.manualOrderArmed = false;
         state.selectedLine = line.id;
         const pointIndex = annotationPointAt(line, point, point.plot);
         state.drawing = pointIndex >= 0 ? {
@@ -831,6 +882,7 @@
       state.selectedLine = null;
       if (state.bars.length) {
         const hit = candleAt(point);
+        state.manualOrderArmed = Boolean(hit);
         const targetIndex = hit ? hit.index : state.selected;
         const part = hit ? candlePartAt(point, hit.index, point.plot) : null;
         if (hit) state.selected = hit.index;
@@ -961,6 +1013,9 @@
       endPrice: priceForY(point.y)
     };
     renderChart();
+  });
+  canvas.addEventListener("blur", () => {
+    state.manualOrderArmed = false;
   });
 
   canvas.addEventListener("pointermove", event => {
@@ -1219,6 +1274,7 @@
     state.viewScale = snapshot.viewScale;
     state.nextLineId = snapshot.nextLineId;
     state.pathDraft = snapshot.pathDraft;
+    state.manualOrderArmed = false;
     state.drawing = null;
     elements.finishPathButton.classList.toggle("hidden", !state.pathDraft);
     render();
@@ -1249,9 +1305,11 @@
   }, { passive: false });
 
   canvas.addEventListener("keydown", event => {
-    const ordinalKey = event.shiftKey && event.code === "Digit1" ? 11
-      : event.shiftKey && event.code === "Digit2" ? 12
-        : /^[0-9]$/.test(event.key) ? (event.key === "0" ? 10 : Number(event.key))
+    const physicalNumber = /^(?:Digit|Numpad)([0-9])$/.exec(event.code)?.[1];
+    const digit = physicalNumber ?? (/^[0-9]$/.test(event.key) ? event.key : null);
+    const ordinalKey = event.shiftKey && digit === "1" ? 11
+      : event.shiftKey && digit === "2" ? 12
+        : digit !== null ? (digit === "0" ? 10 : Number(digit))
           : null;
     if (state.tool === "select" && state.selected >= 0 && ordinalKey !== null) {
       event.preventDefault();

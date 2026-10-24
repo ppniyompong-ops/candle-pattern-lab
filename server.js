@@ -384,9 +384,8 @@ app.post("/api/generate-logic", async (req, res) => {
           const direction = bias === "bearish" ? "bearish" : "bullish";
           const descriptionTemplate = interpretation?.[direction]?.candles;
           const drawingTemplate = candles.length ? candles : descriptionTemplate;
-          const interpretedText = [description, interpretation?.summary, interpretation?.improvedDescription].filter(Boolean).join(" ");
-          const fvgPattern = isFvgPattern(patternName, interpretedText);
-          const namedPattern = fvgPattern ? null : classifyCandlestickPattern(patternName, interpretedText, bias);
+          const fvgPattern = isFvgPattern(patternName, description);
+          const namedPattern = fvgPattern ? null : classifyCandlestickPattern(patternName, description, bias);
           const options = !interpretation ? [] : fvgPattern
             ? fvgLogicOptions()
             : namedPattern

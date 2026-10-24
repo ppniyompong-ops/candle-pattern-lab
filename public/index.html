@@ -32,7 +32,7 @@
       <div class="sidebar-spacer"></div>
       <div class="sidebar-tip">
         <span class="tip-icon">✳</span>
-        <div><strong>วาดให้ชัด แล้วให้ AI ช่วยต่อ</strong><p>กำหนดแท่งเทียนที่ต้องการ จากนั้นให้ Gemini เสนอ logic สำหรับตรวจจับ</p></div>
+        <div><strong>วาดรูปแบบ แล้วตรวจด้วยกฎ HLOC</strong><p>ระบบตรวจจับใช้กฎแท่งเทียนที่กำหนดชัด ส่วน Gemini ช่วยสรุปและสร้างภาพตัวอย่าง</p></div>
       </div>
       <div class="sidebar-foot"><span class="status-dot"></span>LOCAL WORKSPACE <span class="version">v1.0</span></div>
     </aside>
@@ -61,6 +61,13 @@
                 <h2 id="chart-title">พื้นที่วาดแพตเทิร์น</h2>
               </div>
               <div class="chart-actions">
+                <div class="chart-navigation" aria-label="ควบคุมมุมมองกราฟ">
+                  <button id="zoom-out" type="button" title="ซูมออก" aria-label="ซูมออก">−</button>
+                  <span id="zoom-readout" aria-live="polite">100%</span>
+                  <button id="zoom-in" type="button" title="ซูมเข้า" aria-label="ซูมเข้า">＋</button>
+                  <span class="navigation-divider"></span>
+                  <button id="zoom-fit" type="button" title="จัดแท่งทั้งหมดให้อยู่ในกราฟ" aria-label="จัดแท่งทั้งหมดให้อยู่ในกราฟ">พอดี</button>
+                </div>
                 <button id="undo-button" class="icon-button" type="button" title="ย้อนกลับ" aria-label="ย้อนกลับ" disabled>↶</button>
                 <button id="redo-button" class="icon-button" type="button" title="ทำซ้ำ" aria-label="ทำซ้ำ" disabled>↷</button>
                 <button id="clear-button" class="text-button" type="button">ล้างภาพ</button>
@@ -71,7 +78,7 @@
               <div class="tool-group">
                 <button class="tool-button active" type="button" data-tool="bull" aria-pressed="true"><span class="tool-candle bull-swatch"></span><span>แท่งขึ้น</span></button>
                 <button class="tool-button" type="button" data-tool="bear" aria-pressed="false"><span class="tool-candle bear-swatch"></span><span>แท่งลง</span></button>
-                <button class="tool-button" type="button" data-tool="select" aria-pressed="false"><span class="tool-glyph">⌖</span><span>เลือก</span></button>
+                <button class="tool-button" type="button" data-tool="select" aria-pressed="false"><span class="tool-glyph">⌖</span><span>เลือก / จัดลำดับ</span></button>
                 <button class="tool-button" type="button" data-tool="zoom" aria-pressed="false" title="ลากเลือกช่วงเพื่อซูมเข้า"><span class="tool-glyph">⌕</span><span>ซูม</span></button>
                 <button class="tool-button" type="button" data-tool="erase" aria-pressed="false"><span class="tool-glyph">⌫</span><span>ลบ</span></button>
                 <button class="tool-button" type="button" data-tool="line" aria-pressed="false"><span class="line-swatch normal"></span><span>เส้น</span></button>
@@ -87,13 +94,6 @@
             <div class="chart-frame">
               <canvas id="candle-canvas" tabindex="0" role="application" aria-label="พื้นที่วาดแพตเทิร์น ใช้เมาส์ลากเพื่อวาด เลือก หรือย้ายแท่งและเส้น"></canvas>
               <div class="chart-empty hidden" id="empty-hint"><span>✳</span><strong>เริ่มจากวาดหรือเล่ารูปแบบของคุณ</strong><small>วาดแท่งหรือเส้นบนกราฟ หรือใช้คำอธิบายอย่างเดียวก็ได้</small></div>
-              <div class="chart-navigation" aria-label="ควบคุมมุมมองกราฟ">
-                <button id="zoom-out" type="button" title="ซูมออก" aria-label="ซูมออก">−</button>
-                <span id="zoom-readout" aria-live="polite">100%</span>
-                <button id="zoom-in" type="button" title="ซูมเข้า" aria-label="ซูมเข้า">＋</button>
-                <span class="navigation-divider"></span>
-                <button id="zoom-fit" type="button" title="จัดแท่งทั้งหมดให้อยู่ในกราฟ" aria-label="จัดแท่งทั้งหมดให้อยู่ในกราฟ">พอดี</button>
-              </div>
             </div>
             <div class="chart-x-labels"><span>ก่อนหน้า</span><div class="x-track"></div><span>ล่าสุด <b id="latest-bar-label">05</b></span></div>
             <div class="chart-legend">
@@ -108,7 +108,7 @@
               <span class="legend-spacer"></span>
               <span class="selected-readout" id="selected-readout">กราฟแสดงสัดส่วนแท่งเทียนโดยไม่แสดงราคา</span>
             </div>
-            <div class="chart-gesture-note">โหมดเลือก: คลิกแท่งแล้วกดเลข 1–9 (0 = 10, Shift+1 = 11, Shift+2 = 12) เพื่อจัดลำดับ · ลากไส้หรือจุด HLOC เพื่อแก้ · ลากตัวแท่งเพื่อย้าย · ลากพื้นที่ว่างเพื่อเลื่อนกราฟ · ล้อเมาส์ซูมได้ถึง 20%</div>
+            <div class="chart-gesture-note">จัดลำดับ: เลือกเครื่องมือ แล้วคลิกแท่งหนึ่งครั้งก่อนกดเลข 1–9 (0 = 10, Shift+1 = 11, Shift+2 = 12) · ลากไส้หรือจุด HLOC เพื่อแก้ · ลากตัวแท่งเพื่อย้าย · ลากพื้นที่ว่างเพื่อเลื่อนกราฟ · ซูมออกได้ถึง 20%</div>
           </section>
 
           <section class="panel editor-panel" aria-labelledby="editor-title">
@@ -157,7 +157,7 @@
               <div><div class="panel-kicker">GEMINI ASSIST</div><h2 id="ai-title">ให้ AI วิเคราะห์แพตเทิร์น</h2></div>
               <span class="ai-status">AI</span>
             </div>
-            <p class="ai-description">AI จะสรุป HLOC และสร้างภาพตัวอย่างขาขึ้นกับขาลง ส่วนกฎตรวจจับ 3 แบบจะสร้างจากแม่แบบโดยตรง</p>
+            <p class="ai-description">Gemini ช่วยสรุป HLOC และสร้างภาพตัวอย่างขาขึ้นกับขาลง ส่วนกฎตรวจจับทั้ง 3 แบบสร้างจากเงื่อนไข OHLC/ATR ที่ระบบกำหนดไว้ ไม่ให้ AI เขียนโค้ดตรวจจับเอง</p>
             <label class="field-label" for="pattern-description">อธิบายแพตเทิร์นคร่าว ๆ</label>
             <textarea id="pattern-description" class="description-input" maxlength="1200" rows="4" placeholder="เช่น มีแท่งลงยาว 2 แท่ง แล้วตามด้วยแท่งขึ้นที่มีไส้ล่างยาว ปิดเหนือครึ่งหนึ่งของแท่งก่อนหน้า"></textarea>
             <p class="description-hint">วาดแท่งหรือเส้นประกอบ หรือใช้คำอธิบายอย่างเดียวก็ได้</p>

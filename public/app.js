@@ -48,7 +48,8 @@
     description: document.getElementById("pattern-description"),
     savedPatterns: document.getElementById("saved-patterns"),
     savedCount: document.getElementById("saved-count"),
-    logicPlaceholder: document.querySelector(".logic-placeholder"),
+    analysisDialog: document.getElementById("analysis-dialog"),
+    closeAnalysisButton: document.getElementById("close-analysis"),
     logicOptions: document.getElementById("logic-options"),
     selectedOptionSummary: document.getElementById("selected-option-summary"),
     generateButton: document.getElementById("generate-logic"),
@@ -68,7 +69,7 @@
   const aiInterpretationStyles = document.createElement("style");
   aiInterpretationStyles.textContent = ".ai-interpretation{margin:0 0 16px;padding:14px;border:1px solid #283746;border-radius:12px;background:linear-gradient(145deg,rgba(24,36,48,.96),rgba(14,21,29,.98))}.ai-interpretation h3{margin:0 0 6px;color:#e9f1fa;font-size:14px}.ai-interpretation .ai-lead{margin:0 0 12px;color:#afc0d1;font-size:12px;line-height:1.55}.ai-interpretation .ai-description{margin:0 0 14px;padding:10px 11px;color:#cad8e5;background:rgba(8,13,19,.55);border-left:2px solid #78b9f5;border-radius:5px;font-size:12px;line-height:1.6;white-space:pre-wrap}.ai-variant-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,270px),1fr));gap:10px}.ai-variant-card{min-width:0;padding:11px;border:1px solid #293746;border-radius:10px;background:rgba(8,13,19,.58)}.ai-variant-card h4{margin:0 0 5px;color:#e7eef7;font-size:13px}.ai-variant-card p{min-height:34px;margin:0 0 8px;color:#aebdcb;font-size:11px;line-height:1.5}.ai-variant-card canvas{display:block;width:100%;height:auto;border:1px solid #24303d;border-radius:6px;background:#0c1219}.ai-variant-card button{width:100%;margin-top:9px;padding:8px 10px;border:1px solid #3d6588;border-radius:7px;color:#dceeff;background:#17314a;cursor:pointer;font:inherit;font-size:11px;font-weight:700}.ai-variant-card button:hover{background:#214464}";
   document.head.append(aiInterpretationStyles);
-  elements.logicOptions.parentNode.insertBefore(aiInterpretationPanel, elements.logicOptions);
+    elements.logicOptions.parentNode.insertBefore(aiInterpretationPanel, elements.logicOptions);
 
   function cloneBars(bars) {
     return bars.map(bar => ({ ...bar }));
@@ -1357,19 +1358,6 @@
     showToast("โหลดแพตเทิร์นแล้ว");
   });
 
-  function showLogicMessage(message) {
-    state.options = [];
-    state.selectedOptionId = "";
-    state.logic = "";
-    elements.logicOptions.replaceChildren();
-    elements.logicOptions.classList.add("hidden");
-    elements.selectedOptionSummary.classList.add("hidden");
-    elements.logicPlaceholder.classList.remove("hidden");
-    elements.logicPlaceholder.querySelector("strong").textContent = message;
-    elements.logicPlaceholder.querySelector("p").textContent = "";
-    elements.downloadButton.disabled = true;
-  }
-
   function selectLogicOption(id) {
     const option = state.options.find(item => item.id === id);
     if (!option) return;
@@ -1472,6 +1460,7 @@
     elements.description.value = improvedDescription;
     elements.finishPathButton.classList.add("hidden");
     render();
+    if (elements.analysisDialog.open) elements.analysisDialog.close();
     showToast("วางแบบขา" + (direction === "bullish" ? "ขึ้น" : "ลง") + " 5 แท่งพร้อม Entry/TP/SL แล้ว");
   }
 
@@ -1520,9 +1509,7 @@
     state.options = options;
     state.selectedOptionId = "";
     state.logic = "";
-    elements.logicPlaceholder.classList.add("hidden");
     elements.logicOptions.replaceChildren();
-    elements.logicOptions.classList.remove("hidden");
     elements.selectedOptionSummary.classList.add("hidden");
     elements.downloadButton.disabled = true;
 
@@ -1548,6 +1535,7 @@
       elements.logicOptions.append(button);
     });
     renderAiInterpretation(interpretation);
+    if (!elements.analysisDialog.open) elements.analysisDialog.showModal();
   }
 
   function showToast(message) {
@@ -1563,10 +1551,12 @@
       return;
     }
     aiInterpretationPanel.classList.add("hidden");
+    elements.selectedOptionSummary.classList.add("hidden");
+    elements.logicOptions.replaceChildren();
+    if (elements.analysisDialog.open) elements.analysisDialog.close();
     elements.generateButton.disabled = true;
     elements.generateLabel.textContent = "กำลังวิเคราะห์รูปแบบ…";
     elements.generateButton.querySelector(".sparkle").textContent = "◌";
-    showLogicMessage("กำลังอ่านแท่ง เส้น และคำอธิบายเพื่อสร้างตัวเลือก…");
     try {
       const requestBody = JSON.stringify({
           patternName: elements.name.value.trim() || "Untitled pattern",
@@ -1606,7 +1596,6 @@
       showLogicOptions(data.options, data.interpretation);
       showToast("ได้ logic 3 แบบแล้ว เลือกแบบที่ตรงที่สุด");
     } catch (error) {
-      showLogicMessage(error.message || "เกิดข้อผิดพลาดขณะเรียก AI");
       showToast(error.message || "สร้าง logic ไม่สำเร็จ");
     } finally {
       elements.generateButton.disabled = false;
@@ -1614,6 +1603,8 @@
       elements.generateButton.querySelector(".sparkle").textContent = "✦";
     }
   });
+
+  elements.closeAnalysisButton.addEventListener("click", () => elements.analysisDialog.close());
 
   elements.downloadButton.addEventListener("click", () => {
     if (!state.logic) return;

@@ -171,24 +171,25 @@
             <div class="ai-note"><span>ⓘ</span><span>ตรวจสอบรูปแบบและทดสอบกฎกับข้อมูลย้อนหลัง ก่อนนำไปใช้งาน</span></div>
           </section>
 
-          <section class="panel logic-panel" aria-labelledby="logic-title">
-            <div class="logic-top">
-              <div><div class="panel-kicker">PATTERN ANALYSIS</div><h2 id="logic-title">ผลวิเคราะห์และ Logic</h2></div>
-              <span class="logic-mode-count">3 รูปแบบ</span>
-            </div>
-            <div class="logic-body" id="logic-body">
-              <div class="logic-placeholder"><span class="placeholder-icon">⌘</span><strong>วิเคราะห์เพื่อดูรูปแบบตัวอย่าง</strong><p>ระบบจะแสดงสรุป HLOC รูปขาขึ้นและขาลง พร้อมกฎตรวจจับ 3 แบบให้เลือก</p></div>
-              <div id="logic-options" class="logic-options hidden" role="radiogroup" aria-label="เลือก logic ที่ต้องการ"></div>
-              <p id="selected-option-summary" class="selected-option-summary hidden"></p>
-            </div>
-            <div class="logic-foot"><span><i class="logic-dot"></i> HLOC · ทิศทาง · ไส้เทียน</span><button id="download-logic" type="button" disabled>ส่งออก logic <span>↓</span></button></div>
-          </section>
         </aside>
       </section>
 
       <footer class="page-footer"><span>EALAB · PATTERN LAB</span><span>สร้าง logic เพื่อการศึกษา · ไม่ใช่สัญญาณซื้อขาย</span></footer>
     </main>
   </div>
+  <dialog class="analysis-dialog" id="analysis-dialog" aria-labelledby="analysis-dialog-title">
+    <section class="analysis-modal">
+      <header class="analysis-modal-header">
+        <div><div class="panel-kicker">PATTERN ANALYSIS</div><h2 id="analysis-dialog-title">ผลวิเคราะห์แพตเทิร์น</h2><p>สรุป HLOC และรูปแบบที่ AI ตีความ</p></div>
+        <button class="analysis-close" id="close-analysis" type="button" aria-label="ปิดหน้าต่าง">×</button>
+      </header>
+      <div class="analysis-results" id="analysis-results">
+        <div id="logic-options" class="logic-options" role="radiogroup" aria-label="เลือก logic ที่ต้องการ"></div>
+        <p id="selected-option-summary" class="selected-option-summary hidden"></p>
+      </div>
+      <footer class="analysis-modal-footer"><span><i class="logic-dot"></i> HLOC · ทิศทาง · ไส้เทียน</span><button id="download-logic" type="button" disabled>ส่งออก logic <span>↓</span></button></footer>
+    </section>
+  </dialog>
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
   <script src="/app.js"></script>
 </body>

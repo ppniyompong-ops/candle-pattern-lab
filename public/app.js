@@ -522,7 +522,7 @@
     const hints = {
       bull: "เริ่มลากจาก Open ไปยัง Close",
       bear: "เริ่มลากจาก Open ไปยัง Close",
-      select: "ลากกราฟเพื่อเลื่อน · ลากจุดจับเพื่อปรับแท่งหรือปลายเส้น",
+      select: "คลิกแท่งแล้วกดเลข 1–9, 0 = 10, Shift+1 = 11, Shift+2 = 12 · ลากแท่งหรือจุดจับเพื่อแก้ไข · ลากพื้นที่ว่างเพื่อเลื่อน",
       zoom: "ลากคลุมช่วงบนกราฟเพื่อซูมเข้า · ใช้ปุ่ม − เพื่อซูมออก",
       erase: "คลิกแท่งหรือเส้นที่ต้องการลบ",
       line: "ลากเพื่อวาดเส้นอิสระ",
@@ -754,11 +754,30 @@
     render();
   }
 
+  function moveSelectedCandleToNumber(number) {
+    if (state.tool !== "select" || state.selectedLine !== null || state.selected < 0 || !state.bars.length) return false;
+    const targetIndex = number - 1;
+    if (targetIndex < 0 || targetIndex >= state.bars.length) {
+      showToast("มี " + state.bars.length + " แท่ง เลือกลำดับ 1–" + state.bars.length + " ได้");
+      return true;
+    }
+    if (targetIndex === state.selected) return true;
+    remember();
+    const [bar] = state.bars.splice(state.selected, 1);
+    state.bars.splice(targetIndex, 0, bar);
+    state.selected = targetIndex;
+    state.selectedLine = null;
+    render();
+    showToast("ย้ายแท่งที่เลือกเป็นลำดับ " + String(number).padStart(2, "0") + " แล้ว");
+    return true;
+  }
+
   canvas.addEventListener("pointerdown", event => {
     if (event.button !== 0) return;
     if (state.activePointerId !== null) return;
     const point = pointForEvent(event);
     if (point.x < point.plot.left || point.x > point.plot.right || point.y < point.plot.top || point.y > point.plot.bottom) return;
+    canvas.focus({ preventScroll: true });
     state.activePointerId = event.pointerId;
     state.pointerSnapshot = {
       data: createSnapshot(),
@@ -1230,7 +1249,14 @@
   }, { passive: false });
 
   canvas.addEventListener("keydown", event => {
-    if (event.key === "ArrowLeft" && state.bars.length) {
+    const ordinalKey = event.shiftKey && event.code === "Digit1" ? 11
+      : event.shiftKey && event.code === "Digit2" ? 12
+        : /^[0-9]$/.test(event.key) ? (event.key === "0" ? 10 : Number(event.key))
+          : null;
+    if (state.tool === "select" && state.selected >= 0 && ordinalKey !== null) {
+      event.preventDefault();
+      moveSelectedCandleToNumber(ordinalKey);
+    } else if (event.key === "ArrowLeft" && state.bars.length) {
       event.preventDefault();
       setSelected(state.selected - 1);
     } else if (event.key === "ArrowRight" && state.bars.length) {

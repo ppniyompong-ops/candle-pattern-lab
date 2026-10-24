@@ -373,10 +373,10 @@
     if (!Number.isFinite(start) || !Number.isFinite(end) ||
         !Number.isFinite(drawingRange?.min) || !Number.isFinite(drawingRange?.max)) return null;
     const spread = Math.max(drawingRange.max - drawingRange.min, Math.abs(start) * 0.02);
-    if (Math.abs(end - start) < spread * 0.012) end = start + (state.drawing.tool === "bear" ? -1 : 1) * spread * 0.012;
+    const bodySize = Math.max(Math.abs(end - start), spread * 0.012);
     const isBull = state.drawing.tool === "bull";
-    const open = isBull ? Math.min(start, end) : Math.max(start, end);
-    const close = isBull ? Math.max(start, end) : Math.min(start, end);
+    const open = start;
+    const close = start + (isBull ? bodySize : -bodySize);
     const wick = Math.max(spread * 0.018, Math.max(Math.abs(open), Math.abs(close)) * 0.001);
     return {
       index: state.drawing.index,
@@ -389,7 +389,8 @@
     const plot = chartPlot();
     clampViewStart(plot);
     const preview = getPreviewBar();
-    const range = (state.drawing?.adjusting || state.drawing?.movingCandle !== undefined)
+    const range = (state.drawing?.adjusting || state.drawing?.movingCandle !== undefined ||
+      ["bull", "bear"].includes(state.drawing?.tool))
       ? state.drawing.range
       : state.lockedPriceRange || currentRange(preview?.bar);
     priceRange = range;
@@ -1163,11 +1164,12 @@
     }
     const preview = getPreviewBar();
     if (!preview) return;
+    const drawingRange = state.drawing.range;
     remember();
     if (preview.index < state.bars.length) state.bars[preview.index] = preview.bar;
     else state.bars.push(preview.bar);
     state.selected = preview.index;
-    state.lockedPriceRange = null;
+    state.lockedPriceRange = { ...drawingRange };
     state.drawing = null;
     render();
   }

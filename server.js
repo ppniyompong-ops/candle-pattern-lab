@@ -3,6 +3,7 @@ require("dotenv").config();
 const express = require("express");
 const helmet = require("helmet");
 const path = require("path");
+const { buildFvgDetectorCode, FVG_DEFAULTS } = require("./lib/fvg-detector");
 
 const app = express();
 const port = Number(process.env.PORT || 3000);
@@ -124,6 +125,41 @@ function buildDetectionCode(templateCandles, tolerance) {
     "}",
     "// Matches relative HLOC shape, body direction, wick anatomy and candle sequence. Backtest before use."
   ].join("\n");
+}
+
+function isFvgPattern(patternName, description) {
+  const text = (patternName + " " + description).normalize("NFKC").toLowerCase();
+  return /\bfvg\b|fair\s*value\s*gap|fairvaluegap|imbalance|ช่องว่างราคา|ช่องว่างมูลค่ายุติธรรม|แฟร์แวลูแกป/.test(text);
+}
+
+function fvgLogicOptions() {
+  const presets = [
+    {
+      id: "drawing",
+      title: "FVG มาตรฐาน",
+      summary: "ตรวจ displacement, ช่องว่างสามแท่ง, การย่อกลับเข้าโซน และแท่ง rejection ตามลำดับ",
+      settings: FVG_DEFAULTS
+    },
+    {
+      id: "description",
+      title: "FVG เข้มงวด",
+      summary: "คัดเฉพาะ displacement และ gap ที่เด่น พร้อมเวลารอย่อสั้นลง",
+      settings: { ...FVG_DEFAULTS, minBodyAtr: 1, minGapAtr: 0.15, maxWait: 4 }
+    },
+    {
+      id: "flexible",
+      title: "FVG ยืดหยุ่น",
+      summary: "ยอมรับ displacement และ gap เล็กลง พร้อมขยายเวลารอย่อกลับ",
+      settings: { ...FVG_DEFAULTS, minBodyAtr: 0.6, minGapAtr: 0.05, maxWait: 8 }
+    }
+  ];
+  return presets.map(preset => ({
+    id: preset.id,
+    title: preset.title,
+    summary: preset.summary,
+    ruleInfo: `ATR ${preset.settings.atrPeriod} · body ≥${preset.settings.minBodyAtr}×ATR · gap ≥${preset.settings.minGapAtr}×ATR · รอ ${preset.settings.maxWait} แท่ง · SL buffer ${preset.settings.slBufferAtr}×ATR · RR 1:${preset.settings.rr}`,
+    code: buildFvgDetectorCode(preset.settings)
+  }));
 }
 
 function validateLines(value) {
@@ -330,7 +366,8 @@ app.post("/api/generate-logic", async (req, res) => {
           const direction = bias === "bearish" ? "bearish" : "bullish";
           const descriptionTemplate = interpretation?.[direction]?.candles;
           const drawingTemplate = candles.length ? candles : descriptionTemplate;
-          const options = interpretation ? [
+          const fvgPattern = isFvgPattern(patternName, description);
+          const options = !interpretation ? [] : fvgPattern ? fvgLogicOptions() : [
             { id: "drawing", title: candles.length ? "เทียบกับรูปวาด" : "เทียบกับรูปแบบที่ AI ตีความ", summary: "เทียบ HLOC ทุกแท่ง พร้อมสัดส่วน body, ไส้บน/ล่าง และทิศทางเนื้อแท่ง", template: drawingTemplate, tolerance: 0.07 },
             { id: "description", title: "เทียบกับคำอธิบาย", summary: "ใช้รูปแบบห้าแท่งจากคำอธิบาย พร้อมตรวจทิศทางและการเปลี่ยนแปลง Close ต่อเนื่อง", template: descriptionTemplate, tolerance: 0.11 },
             { id: "flexible", title: "ยืดหยุ่นกับสัดส่วน", summary: "ใช้แม่แบบเดิมแต่ยอมให้ body และไส้ต่างได้มากขึ้น โดยยังคิดคะแนนลำดับแท่ง", template: drawingTemplate, tolerance: 0.19 }
@@ -340,9 +377,9 @@ app.post("/api/generate-logic", async (req, res) => {
             summary: option.summary,
             tolerance: option.tolerance,
             code: buildDetectionCode(option.template, option.tolerance)
-          })) : [];
-          if (interpretation && options.length === 3 && options.every(option => option.code.length < 2500)) {
-            result = { options, interpretation, model };
+          }));
+          if (interpretation && options.length === 3 && options.every(option => option.code.length < 15000)) {
+            result = { options, interpretation, model, kind: fvgPattern ? "fvg" : "pattern" };
             break;
           }
           lastFailure = { kind: "validation" };

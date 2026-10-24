@@ -390,6 +390,7 @@ body { font-size: 14px; line-height: 1.55; }
 .logic-option strong { align-self: center; font-size: 14px; line-height: 1.4; }
 .logic-option > span { grid-column: 2; min-width: 0; margin-top: 0; font-size: 12px; line-height: 1.6; overflow-wrap: anywhere; }
 .logic-option .logic-option-method { grid-column: 2; grid-row: 3; display: block; min-width: 0; color: #83c8a8; font: 10px/1.5 var(--mono); letter-spacing: 0; white-space: normal; overflow-wrap: anywhere; }
+.logic-option .logic-option-method.fvg-rule-info, .selected-option-summary .fvg-rule-info { font: 11px/1.6 var(--sans); }
 .option-radio { grid-column: 1; grid-row: 1 / span 3; align-self: start; width: 14px; height: 14px; margin-top: 2px; }
 .selected-option-summary { gap: 8px; margin: 8px 0 0; padding: 14px 16px; font-size: 13px; line-height: 1.65; }
 .selected-option-summary small { font: 11px/1.55 var(--mono); }

@@ -1419,7 +1419,9 @@
     const summaryText = document.createElement("span");
     summaryText.textContent = option.summary;
     const scoreText = document.createElement("small");
-    scoreText.textContent = "คะแนนรวม HLOC + รูปร่าง body/ไส้ + ลำดับ Close · ค่าคลาดเคลื่อน " + Math.round(option.tolerance * 100) + "%";
+    scoreText.textContent = option.ruleInfo ||
+      ("คะแนนรวม HLOC + รูปร่าง body/ไส้ + ลำดับ Close · ค่าคลาดเคลื่อน " + Math.round(option.tolerance * 100) + "%");
+    if (option.ruleInfo) scoreText.classList.add("fvg-rule-info");
     elements.selectedOptionSummary.append(summaryText, scoreText);
     elements.selectedOptionSummary.classList.remove("hidden");
     elements.downloadButton.disabled = false;
@@ -1574,7 +1576,8 @@
       summary.className = "logic-option-summary";
       const method = document.createElement("small");
       method.className = "logic-option-method";
-      method.textContent = "HLOC · body · wick · sequence  |  ±" + Math.round(option.tolerance * 100) + "%";
+      method.textContent = option.ruleInfo || ("HLOC · body · wick · sequence  |  ±" + Math.round(option.tolerance * 100) + "%");
+      if (option.ruleInfo) method.classList.add("fvg-rule-info");
       const marker = document.createElement("i");
       marker.className = "option-radio";
       button.append(marker, title, summary, method);

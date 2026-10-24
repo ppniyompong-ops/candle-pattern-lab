@@ -21,6 +21,8 @@
     selectedLine: null,
     tool: "bull",
     drawing: null,
+    activePointerId: null,
+    pointerSnapshot: null,
     undo: [],
     redo: [],
     options: [],
@@ -753,8 +755,26 @@
 
   canvas.addEventListener("pointerdown", event => {
     if (event.button !== 0) return;
+    if (state.activePointerId !== null) return;
     const point = pointForEvent(event);
     if (point.x < point.plot.left || point.x > point.plot.right || point.y < point.plot.top || point.y > point.plot.bottom) return;
+    state.activePointerId = event.pointerId;
+    state.pointerSnapshot = {
+      data: createSnapshot(),
+      undo: state.undo.slice(),
+      redo: state.redo.slice(),
+      selected: state.selected,
+      selectedLine: state.selectedLine,
+      lockedPriceRange: state.lockedPriceRange ? { ...state.lockedPriceRange } : null,
+      viewStart: state.viewStart,
+      viewScale: state.viewScale,
+      nextLineId: state.nextLineId,
+      pathDraft: state.pathDraft ? {
+        points: state.pathDraft.points.map(item => ({ ...item })),
+        preview: state.pathDraft.preview ? { ...state.pathDraft.preview } : null
+      } : null
+    };
+    try { canvas.setPointerCapture(event.pointerId); } catch {}
     if (state.tool === "zoom") {
       state.drawing = {
         zooming: true,
@@ -763,7 +783,6 @@
         currentX: point.x,
         currentY: point.y
       };
-      canvas.setPointerCapture(event.pointerId);
       renderChart();
       return;
     }
@@ -786,7 +805,6 @@
           startRange: { ...priceRange },
           originalLine: cloneLines([line])[0]
         };
-        canvas.setPointerCapture(event.pointerId);
         renderChart();
         return;
       }
@@ -798,7 +816,6 @@
         if (hit) state.selected = hit.index;
         if (part) {
           state.drawing = { adjusting: part, index: targetIndex, range: { ...priceRange }, moved: false, startX: point.x, startY: point.y };
-          canvas.setPointerCapture(event.pointerId);
           renderChart();
           return;
         }
@@ -820,7 +837,6 @@
               range: { ...priceRange },
               originalBar: { ...bar }
             };
-            canvas.setPointerCapture(event.pointerId);
           }
           renderChart();
           return;
@@ -832,7 +848,6 @@
           initialViewStart: state.viewStart,
           index: hit ? hit.index : state.selected
         };
-        canvas.setPointerCapture(event.pointerId);
       }
       return;
     }
@@ -909,7 +924,6 @@
           price: priceForY(point.y), range: { ...priceRange }
         };
       }
-      canvas.setPointerCapture(event.pointerId);
       renderChart();
       return;
     }
@@ -926,11 +940,11 @@
       startPrice: priceForY(point.y),
       endPrice: priceForY(point.y)
     };
-    canvas.setPointerCapture(event.pointerId);
     renderChart();
   });
 
   canvas.addEventListener("pointermove", event => {
+    if (state.activePointerId !== null && event.pointerId !== state.activePointerId) return;
     const point = pointForEvent(event);
     if (state.pathDraft && !state.drawing) {
       state.pathDraft.preview = {
@@ -1157,8 +1171,39 @@
     state.drawing = null;
     render();
   }
-  canvas.addEventListener("pointerup", finishDrawing);
-  canvas.addEventListener("pointercancel", finishDrawing);
+  canvas.addEventListener("pointerup", event => {
+    if (state.activePointerId === null || event.pointerId !== state.activePointerId) return;
+    finishDrawing();
+    state.activePointerId = null;
+    state.pointerSnapshot = null;
+  });
+  function cancelPointerInteraction(event) {
+    if (state.activePointerId === null || event.pointerId !== state.activePointerId) return;
+    const snapshot = state.pointerSnapshot;
+    state.activePointerId = null;
+    state.pointerSnapshot = null;
+    if (!snapshot) {
+      state.drawing = null;
+      renderChart();
+      return;
+    }
+    state.bars = cloneBars(snapshot.data.bars);
+    state.lines = cloneLines(snapshot.data.lines);
+    state.undo = snapshot.undo;
+    state.redo = snapshot.redo;
+    state.selected = snapshot.selected;
+    state.selectedLine = snapshot.selectedLine;
+    state.lockedPriceRange = snapshot.lockedPriceRange;
+    state.viewStart = snapshot.viewStart;
+    state.viewScale = snapshot.viewScale;
+    state.nextLineId = snapshot.nextLineId;
+    state.pathDraft = snapshot.pathDraft;
+    state.drawing = null;
+    elements.finishPathButton.classList.toggle("hidden", !state.pathDraft);
+    render();
+  }
+  canvas.addEventListener("pointercancel", cancelPointerInteraction);
+  canvas.addEventListener("lostpointercapture", cancelPointerInteraction);
   canvas.addEventListener("dblclick", event => {
     if (state.tool === "path" && state.pathDraft) {
       event.preventDefault();

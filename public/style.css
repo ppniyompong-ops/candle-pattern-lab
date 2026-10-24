@@ -240,6 +240,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .logic-panel { overflow: hidden; }
 .logic-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 15px 16px 12px; border-bottom: 1px solid var(--line-soft); }
 .logic-top h2 { margin-top: 5px; font-size: 13px; }
+.logic-mode-count { padding: 5px 8px; border: 1px solid rgba(114,217,173,.2); border-radius: 99px; color: #95d7b3; background: rgba(114,217,173,.06); font-size: 8px; }
 .copy-button { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 9px; font-size: 9px; }
 .copy-button span { font-size: 11px; }
 .logic-body { min-height: 190px; max-height: 340px; overflow: auto; }
@@ -247,20 +248,17 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .placeholder-icon { width: 34px; height: 34px; display: grid; place-items: center; border: 1px solid rgba(129,164,167,.15); border-radius: 9px; color: #87c4a3; background: rgba(72,128,97,.09); font-size: 15px; }
 .logic-placeholder strong { margin-top: 11px; color: #b9cbcd; font-size: 10px; font-weight: 500; }
 .logic-placeholder p { max-width: 235px; margin: 5px 0 0; color: #758990; font-size: 9px; line-height: 1.65; }
-#logic-output { margin: 0; padding: 12px; color: #bdd2ce; font: 9px/1.7 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; }
-.logic-source-details { margin: 10px 11px; border: 1px solid rgba(138,164,171,.13); border-radius: 7px; color: #91a3a8; font-size: 9px; }
-.logic-source-details summary { padding: 9px 10px; cursor: pointer; }
-.logic-source-details[open] summary { border-bottom: 1px solid rgba(138,164,171,.13); color: #c5d8d2; }
-.logic-source-details.hidden { display: none; }
 .logic-options { display: grid; gap: 7px; padding: 11px; }
 .logic-option { display: grid; grid-template-columns: 14px minmax(0,1fr); align-items: start; column-gap: 8px; width: 100%; padding: 10px; border: 1px solid rgba(138,164,171,.13); border-radius: 7px; color: #91a3a8; background: rgba(255,255,255,.018); text-align: left; cursor: pointer; }
 .logic-option:hover { border-color: rgba(114,217,173,.32); background: rgba(114,217,173,.035); }
 .logic-option.selected { border-color: rgba(114,217,173,.55); background: rgba(114,217,173,.08); }
 .logic-option strong { color: #d4e4e2; font-size: 9px; font-weight: 600; }
 .logic-option > span { grid-column: 2; margin-top: 4px; color: #86999f; font-size: 9px; line-height: 1.55; }
+.logic-option .logic-option-method { color: #74b899; font: 7px/1.45 var(--mono); letter-spacing: .02em; }
 .option-radio { grid-row: 1 / span 2; width: 11px; height: 11px; margin-top: 1px; border: 1px solid #60747c; border-radius: 50%; }
 .logic-option.selected .option-radio { border: 3px solid #7dd8a8; background: #16271f; }
-.selected-option-summary { margin: 0 11px; padding: 10px; border-left: 2px solid rgba(114,217,173,.58); color: #90a6a4; background: rgba(114,217,173,.045); font-size: 9px; line-height: 1.6; }
+.selected-option-summary { display: grid; gap: 6px; margin: 0 11px 10px; padding: 10px; border-left: 2px solid rgba(114,217,173,.58); color: #c6d7d2; background: rgba(114,217,173,.045); font-size: 9px; line-height: 1.6; }
+.selected-option-summary small { color: #73b394; font: 7px/1.5 var(--mono); }
 .selected-option-summary.hidden { display: none; }
 .logic-foot { display: flex; align-items: center; justify-content: space-between; min-height: 34px; padding: 0 14px; border-top: 1px solid var(--line-soft); color: #748990; font-size: 8px; }
 .logic-foot > span { display: flex; align-items: center; gap: 6px; }

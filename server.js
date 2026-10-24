@@ -106,12 +106,23 @@ function buildDetectionCode(templateCandles, tolerance) {
     "  const low = Math.min(...bars.map(c => c.low));",
     "  const range = high - low;",
     "  if (!(range > 0)) return false;",
-    "  const keys = ['open','high','low','close'];",
-    "  let error = 0;",
-    "  bars.forEach((c, i) => keys.forEach(key => { error += Math.abs((c[key] - low) / range - template[i][key]); }));",
-    `  return error / (template.length * keys.length) <= ${tolerance};`,
+    "  const shape = bars.map(c => ({ o:(c.open-low)/range, h:(c.high-low)/range, l:(c.low-low)/range, c:(c.close-low)/range }));",
+    "  let hlocError=0, anatomyError=0, sequenceError=0, directionPenalty=0;",
+    "  for(let i=0;i<template.length;i++){",
+    "    const a=shape[i], b=template[i], span=Math.max(b.high-b.low,0.000001);",
+    "    hlocError += (Math.abs(a.o-b.open)+Math.abs(a.h-b.high)+Math.abs(a.l-b.low)+Math.abs(a.c-b.close))/4;",
+    "    const bodyA=a.c-a.o, bodyB=b.close-b.open;",
+    "    const upperA=a.h-Math.max(a.o,a.c), upperB=b.high-Math.max(b.open,b.close);",
+    "    const lowerA=Math.min(a.o,a.c)-a.l, lowerB=Math.min(b.open,b.close)-b.low;",
+    "    anatomyError += (Math.abs(bodyA-bodyB)+Math.abs(upperA-upperB)+Math.abs(lowerA-lowerB))/span;",
+    "    if(Math.sign(bodyA)!==Math.sign(bodyB) && Math.abs(bodyA)+Math.abs(bodyB)>0.04) directionPenalty += 0.12;",
+    "    if(i>0){ const moveA=a.c-shape[i-1].c, moveB=b.close-template[i-1].close; sequenceError += Math.abs(moveA-moveB); }",
+    "  }",
+    "  const n=template.length;",
+    "  const score=0.45*hlocError/n+0.3*anatomyError/n+0.25*sequenceError/Math.max(1,n-1)+directionPenalty/n;",
+    `  return score <= ${tolerance};`,
     "}",
-    "// Backtest this geometric rule before using it."
+    "// Matches relative HLOC shape, body direction, wick anatomy and candle sequence. Backtest before use."
   ].join("\n");
 }
 
@@ -320,13 +331,14 @@ app.post("/api/generate-logic", async (req, res) => {
           const descriptionTemplate = interpretation?.[direction]?.candles;
           const drawingTemplate = candles.length ? candles : descriptionTemplate;
           const options = interpretation ? [
-            { id: "drawing", title: candles.length ? "เทียบกับรูปวาด" : "เทียบกับรูปแบบที่ AI ตีความ", summary: "ตรวจลำดับและสัดส่วน HLOC ตามแม่แบบ โดยปรับเทียบกับช่วงราคาของแท่งชุดล่าสุด", template: drawingTemplate, tolerance: 0.08 },
-            { id: "description", title: "เทียบกับคำอธิบาย", summary: "ใช้รูปแบบห้าแท่งที่ AI สรุปจากคำอธิบายและตรวจลำดับ HLOC", template: descriptionTemplate, tolerance: 0.12 },
-            { id: "flexible", title: "ยืดหยุ่นกับสัดส่วน", summary: "รักษาลำดับและทิศทางหลัก แต่ยอมให้สัดส่วนแท่งและไส้ต่างจากแม่แบบได้มากขึ้น", template: drawingTemplate, tolerance: 0.2 }
+            { id: "drawing", title: candles.length ? "เทียบกับรูปวาด" : "เทียบกับรูปแบบที่ AI ตีความ", summary: "เทียบ HLOC ทุกแท่ง พร้อมสัดส่วน body, ไส้บน/ล่าง และทิศทางเนื้อแท่ง", template: drawingTemplate, tolerance: 0.07 },
+            { id: "description", title: "เทียบกับคำอธิบาย", summary: "ใช้รูปแบบห้าแท่งจากคำอธิบาย พร้อมตรวจทิศทางและการเปลี่ยนแปลง Close ต่อเนื่อง", template: descriptionTemplate, tolerance: 0.11 },
+            { id: "flexible", title: "ยืดหยุ่นกับสัดส่วน", summary: "ใช้แม่แบบเดิมแต่ยอมให้ body และไส้ต่างได้มากขึ้น โดยยังคิดคะแนนลำดับแท่ง", template: drawingTemplate, tolerance: 0.19 }
           ].map(option => ({
             id: option.id,
             title: option.title,
             summary: option.summary,
+            tolerance: option.tolerance,
             code: buildDetectionCode(option.template, option.tolerance)
           })) : [];
           if (interpretation && options.length === 3 && options.every(option => option.code.length < 2500)) {

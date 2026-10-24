@@ -51,11 +51,8 @@
     logicPlaceholder: document.querySelector(".logic-placeholder"),
     logicOptions: document.getElementById("logic-options"),
     selectedOptionSummary: document.getElementById("selected-option-summary"),
-    logicSourceDetails: document.getElementById("logic-source-details"),
-    logicOutput: document.getElementById("logic-output"),
     generateButton: document.getElementById("generate-logic"),
     generateLabel: document.getElementById("generate-label"),
-    copyButton: document.getElementById("copy-logic"),
     downloadButton: document.getElementById("download-logic"),
     toast: document.getElementById("toast"),
     toolHint: document.getElementById("tool-hint"),
@@ -1367,11 +1364,9 @@
     elements.logicOptions.replaceChildren();
     elements.logicOptions.classList.add("hidden");
     elements.selectedOptionSummary.classList.add("hidden");
-    elements.logicSourceDetails.classList.add("hidden");
     elements.logicPlaceholder.classList.remove("hidden");
     elements.logicPlaceholder.querySelector("strong").textContent = message;
     elements.logicPlaceholder.querySelector("p").textContent = "";
-    elements.copyButton.disabled = true;
     elements.downloadButton.disabled = true;
   }
 
@@ -1385,12 +1380,13 @@
       button.classList.toggle("selected", selected);
       button.setAttribute("aria-checked", String(selected));
     });
-    elements.selectedOptionSummary.textContent = option.summary;
+    elements.selectedOptionSummary.replaceChildren();
+    const summaryText = document.createElement("span");
+    summaryText.textContent = option.summary;
+    const scoreText = document.createElement("small");
+    scoreText.textContent = "คะแนนรวม HLOC + รูปร่าง body/ไส้ + ลำดับ Close · ค่าคลาดเคลื่อน " + Math.round(option.tolerance * 100) + "%";
+    elements.selectedOptionSummary.append(summaryText, scoreText);
     elements.selectedOptionSummary.classList.remove("hidden");
-    elements.logicOutput.textContent = option.code;
-    elements.logicSourceDetails.open = false;
-    elements.logicSourceDetails.classList.remove("hidden");
-    elements.copyButton.disabled = false;
     elements.downloadButton.disabled = false;
   }
 
@@ -1528,8 +1524,6 @@
     elements.logicOptions.replaceChildren();
     elements.logicOptions.classList.remove("hidden");
     elements.selectedOptionSummary.classList.add("hidden");
-    elements.logicSourceDetails.classList.add("hidden");
-    elements.copyButton.disabled = true;
     elements.downloadButton.disabled = true;
 
     options.forEach(option => {
@@ -1543,9 +1537,13 @@
       title.textContent = option.title;
       const summary = document.createElement("span");
       summary.textContent = option.summary;
+      summary.className = "logic-option-summary";
+      const method = document.createElement("small");
+      method.className = "logic-option-method";
+      method.textContent = "HLOC · body · wick · sequence  |  ±" + Math.round(option.tolerance * 100) + "%";
       const marker = document.createElement("i");
       marker.className = "option-radio";
-      button.append(marker, title, summary);
+      button.append(marker, title, summary, method);
       button.addEventListener("click", () => selectLogicOption(option.id));
       elements.logicOptions.append(button);
     });
@@ -1614,16 +1612,6 @@
       elements.generateButton.disabled = false;
       elements.generateLabel.textContent = "วิเคราะห์แพตเทิร์น";
       elements.generateButton.querySelector(".sparkle").textContent = "✦";
-    }
-  });
-
-  elements.copyButton.addEventListener("click", async () => {
-    if (!state.logic) return;
-    try {
-      await navigator.clipboard.writeText(state.logic);
-      showToast("คัดลอก JavaScript แล้ว");
-    } catch {
-      showToast("คัดลอกไม่สำเร็จ ตรวจสอบสิทธิ์ Clipboard ของเบราว์เซอร์");
     }
   });
 

@@ -154,10 +154,10 @@
           <section class="panel ai-panel" aria-labelledby="ai-title">
             <div class="ai-heading">
               <div class="ai-icon">✳</div>
-              <div><div class="panel-kicker">GEMINI ASSIST</div><h2 id="ai-title">ให้ AI เขียน logic</h2></div>
+              <div><div class="panel-kicker">GEMINI ASSIST</div><h2 id="ai-title">ให้ AI วิเคราะห์แพตเทิร์น</h2></div>
               <span class="ai-status">AI</span>
             </div>
-            <p class="ai-description">วาดแท่งและเส้น Entry / TP / SL พร้อมอธิบายคร่าว ๆ แล้ว Gemini จะเสนอ logic 3 แบบให้เลือก</p>
+            <p class="ai-description">AI จะสรุป HLOC และสร้างภาพตัวอย่างขาขึ้นกับขาลง ส่วนกฎตรวจจับ 3 แบบจะสร้างจากแม่แบบโดยตรง</p>
             <label class="field-label" for="pattern-description">อธิบายแพตเทิร์นคร่าว ๆ</label>
             <textarea id="pattern-description" class="description-input" maxlength="1200" rows="4" placeholder="เช่น มีแท่งลงยาว 2 แท่ง แล้วตามด้วยแท่งขึ้นที่มีไส้ล่างยาว ปิดเหนือครึ่งหนึ่งของแท่งก่อนหน้า"></textarea>
             <p class="description-hint">วาดแท่งหรือเส้นประกอบ หรือใช้คำอธิบายอย่างเดียวก็ได้</p>
@@ -165,24 +165,27 @@
               <div><span class="context-icon">▥</span><span>อินพุต</span><strong id="ai-bar-count">5 candles</strong></div>
               <div><span class="context-icon">╱</span><span>เส้นอ้างอิง</span><strong id="ai-line-count">0 lines</strong></div>
               <div><span class="context-icon">⌘</span><span>ตัวเลือก</span><strong>3 แบบ</strong></div>
-              <div><span class="context-icon">◎</span><span>เอาต์พุต</span><strong>JavaScript</strong></div>
+              <div><span class="context-icon">◎</span><span>เอาต์พุต</span><strong>ภาพ + logic</strong></div>
             </div>
-            <button class="generate-button" id="generate-logic" type="button"><span class="sparkle">✦</span><span id="generate-label">สร้าง logic ด้วย AI</span><span class="button-arrow">↗</span></button>
-            <div class="ai-note"><span>ⓘ</span><span>AI อาจตีความรูปแบบคลาดเคลื่อน โปรดตรวจโค้ดและทดสอบกับข้อมูลย้อนหลัง</span></div>
+            <button class="generate-button" id="generate-logic" type="button"><span class="sparkle">✦</span><span id="generate-label">วิเคราะห์แพตเทิร์น</span><span class="button-arrow">↗</span></button>
+            <div class="ai-note"><span>ⓘ</span><span>ตรวจสอบรูปแบบและทดสอบกฎกับข้อมูลย้อนหลัง ก่อนนำไปใช้งาน</span></div>
           </section>
 
           <section class="panel logic-panel" aria-labelledby="logic-title">
             <div class="logic-top">
-              <div><div class="panel-kicker">LOGIC OUTPUT</div><h2 id="logic-title">ผลลัพธ์จาก AI</h2></div>
+              <div><div class="panel-kicker">PATTERN ANALYSIS</div><h2 id="logic-title">ผลวิเคราะห์และ Logic</h2></div>
               <button id="copy-logic" class="copy-button" type="button" disabled><span>▣</span>คัดลอก</button>
             </div>
             <div class="logic-body" id="logic-body">
-              <div class="logic-placeholder"><span class="placeholder-icon">⌘</span><strong>เลือก logic ที่ตรงกับไอเดีย</strong><p>วาดแท่งเทียนและเขียนคำอธิบาย แล้ว AI จะสร้างตัวเลือก 3 แบบให้เปรียบเทียบ</p></div>
+              <div class="logic-placeholder"><span class="placeholder-icon">⌘</span><strong>วิเคราะห์เพื่อดูรูปแบบตัวอย่าง</strong><p>ระบบจะแสดงสรุป HLOC รูปขาขึ้นและขาลง พร้อมกฎตรวจจับ 3 แบบให้เลือก</p></div>
               <div id="logic-options" class="logic-options hidden" role="radiogroup" aria-label="เลือก logic ที่ต้องการ"></div>
               <p id="selected-option-summary" class="selected-option-summary hidden"></p>
-              <pre id="logic-output" class="hidden" aria-live="polite"></pre>
+              <details id="logic-source-details" class="logic-source-details hidden">
+                <summary>ดูโค้ด logic</summary>
+                <pre id="logic-output" aria-live="polite"></pre>
+              </details>
             </div>
-            <div class="logic-foot"><span><i class="logic-dot"></i> JavaScript</span><button id="download-logic" type="button" disabled>ดาวน์โหลด .js <span>↓</span></button></div>
+            <div class="logic-foot"><span><i class="logic-dot"></i> Pattern UI · HLOC</span><button id="download-logic" type="button" disabled>ดาวน์โหลด .js <span>↓</span></button></div>
           </section>
         </aside>
       </section>

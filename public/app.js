@@ -51,6 +51,7 @@
     logicPlaceholder: document.querySelector(".logic-placeholder"),
     logicOptions: document.getElementById("logic-options"),
     selectedOptionSummary: document.getElementById("selected-option-summary"),
+    logicSourceDetails: document.getElementById("logic-source-details"),
     logicOutput: document.getElementById("logic-output"),
     generateButton: document.getElementById("generate-logic"),
     generateLabel: document.getElementById("generate-label"),
@@ -1366,7 +1367,7 @@
     elements.logicOptions.replaceChildren();
     elements.logicOptions.classList.add("hidden");
     elements.selectedOptionSummary.classList.add("hidden");
-    elements.logicOutput.classList.add("hidden");
+    elements.logicSourceDetails.classList.add("hidden");
     elements.logicPlaceholder.classList.remove("hidden");
     elements.logicPlaceholder.querySelector("strong").textContent = message;
     elements.logicPlaceholder.querySelector("p").textContent = "";
@@ -1387,7 +1388,8 @@
     elements.selectedOptionSummary.textContent = option.summary;
     elements.selectedOptionSummary.classList.remove("hidden");
     elements.logicOutput.textContent = option.code;
-    elements.logicOutput.classList.remove("hidden");
+    elements.logicSourceDetails.open = false;
+    elements.logicSourceDetails.classList.remove("hidden");
     elements.copyButton.disabled = false;
     elements.downloadButton.disabled = false;
   }
@@ -1526,7 +1528,7 @@
     elements.logicOptions.replaceChildren();
     elements.logicOptions.classList.remove("hidden");
     elements.selectedOptionSummary.classList.add("hidden");
-    elements.logicOutput.classList.add("hidden");
+    elements.logicSourceDetails.classList.add("hidden");
     elements.copyButton.disabled = true;
     elements.downloadButton.disabled = true;
 
@@ -1610,7 +1612,7 @@
       showToast(error.message || "สร้าง logic ไม่สำเร็จ");
     } finally {
       elements.generateButton.disabled = false;
-      elements.generateLabel.textContent = "สร้าง logic ด้วย AI";
+      elements.generateLabel.textContent = "วิเคราะห์แพตเทิร์น";
       elements.generateButton.querySelector(".sparkle").textContent = "✦";
     }
   });
